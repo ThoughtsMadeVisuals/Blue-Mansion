@@ -51,6 +51,11 @@ const BEVERAGE_KEYWORDS = [
   'cappuccino',
   'barista',
   'highball',
+  'refresher',
+  'energiser',
+  'enegiser',
+  'boocha',
+  'kombucha',
 ];
 
 const FOOD_KEYWORDS = [
@@ -59,6 +64,10 @@ const FOOD_KEYWORDS = [
   'lunch',
   'dinner',
   'all day dining',
+  'big plate',
+  'small plate',
+  'plate',
+  'sweet',
   'starter',
   'appetizer',
   'salad',
@@ -159,15 +168,23 @@ export function inferFoodBev(
     return rules.categoryFoodBev[category];
   }
 
-  const catNorm = category.toLowerCase();
-  const prodNorm = product.toLowerCase();
+  // Check from most specific category segment (leaf) to parent segments
+  const segments = category
+    .split('/')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .reverse();
 
-  for (const kw of FOOD_KEYWORDS) {
-    if (matchesKeyword(catNorm, kw)) return 'Food';
+  for (const seg of segments) {
+    for (const kw of BEVERAGE_KEYWORDS) {
+      if (matchesKeyword(seg, kw)) return 'Beverage';
+    }
+    for (const kw of FOOD_KEYWORDS) {
+      if (matchesKeyword(seg, kw)) return 'Food';
+    }
   }
-  for (const kw of BEVERAGE_KEYWORDS) {
-    if (matchesKeyword(catNorm, kw)) return 'Beverage';
-  }
+
+  const prodNorm = product.toLowerCase();
   for (const kw of FOOD_KEYWORDS) {
     if (matchesKeyword(prodNorm, kw)) return 'Food';
   }

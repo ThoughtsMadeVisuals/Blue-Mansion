@@ -9,7 +9,12 @@ import {
   YAxis,
 } from 'recharts';
 import type { CategoryAggRow, AggregatedReport } from '../utils/aggregator';
-import { formatCompactRM, formatInt, formatRM } from '../utils/formatters';
+import {
+  formatCompactRM,
+  formatInt,
+  formatRM,
+  formatShortCategory,
+} from '../utils/formatters';
 import { ZoomableChartSection } from './ZoomableChartSection';
 
 interface SalesByCategoryChartProps {
@@ -51,7 +56,7 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({
       data={topCategories}
       getLabel={(item) => item.category}
       headerExtra={foodVsBevPills}
-      heightClass="h-96"
+      heightClass="h-[420px]"
       emptyState={
         topCategories.length === 0 ? (
           <div className="py-12 text-center text-xs text-slate-400">
@@ -80,11 +85,34 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({
               dataKey="category"
               axisLine={false}
               tickLine={false}
-              width={150}
-              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#334155' }}
+              width={isExpanded ? 240 : 185}
               interval={0}
+              tick={(props: {
+                x?: number | string;
+                y?: number | string;
+                payload?: { value?: string };
+              }) => {
+                const raw = String(props.payload?.value ?? '');
+                const shortLabel = formatShortCategory(raw, isExpanded ? 34 : 25);
+                return (
+                  <g transform={`translate(${Number(props.x ?? 0)},${Number(props.y ?? 0)})`}>
+                    <title>{raw}</title>
+                    <text
+                      x={-6}
+                      y={0}
+                      dy={4}
+                      textAnchor="end"
+                      fill="#334155"
+                      fontSize={isExpanded ? 12 : 11}
+                    >
+                      {shortLabel}
+                    </text>
+                  </g>
+                );
+              }}
             />
             <Tooltip
+              labelFormatter={(label) => String(label)}
               formatter={(value: number) => [formatRM(value), 'Sales']}
               contentStyle={{
                 borderRadius: '12px',
@@ -96,7 +124,7 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({
               dataKey="totalSales"
               name={`${outletLabel} Sales`}
               fill={accentColor}
-              maxBarSize={24}
+              maxBarSize={22}
               radius={[0, 6, 6, 0]}
               isAnimationActive={false}
             />

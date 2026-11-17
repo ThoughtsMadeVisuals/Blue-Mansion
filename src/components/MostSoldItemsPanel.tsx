@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Utensils, Wine } from 'lucide-react';
 import type { ItemAggRow } from '../utils/aggregator';
-import { formatInt, formatRM } from '../utils/formatters';
+import { formatInt, formatRM, formatShortCategory } from '../utils/formatters';
 
 interface MostSoldItemsPanelProps {
   topFood: ItemAggRow[];
@@ -71,8 +71,11 @@ export const MostSoldItemsPanel: React.FC<MostSoldItemsPanelProps> = ({
                       <span className="truncate font-medium text-slate-800">
                         {item.product}
                       </span>
-                      <span className="hidden rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 sm:inline">
-                        {item.category}
+                      <span
+                        title={item.category}
+                        className="hidden shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 sm:inline"
+                      >
+                        {formatShortCategory(item.category, 22)}
                       </span>
                     </div>
                     <div className="ml-2 shrink-0 text-right">

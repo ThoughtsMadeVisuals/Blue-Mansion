@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import type { ItemAggRow } from '../utils/aggregator';
-import { formatInt, formatRM } from '../utils/formatters';
+import { formatInt, formatRM, formatShortCategory } from '../utils/formatters';
 
 interface SalesByItemTableProps {
   items: ItemAggRow[];
@@ -149,7 +149,9 @@ export const SalesByItemTable: React.FC<SalesByItemTableProps> = ({
                   >
                     <td className="px-3 py-2 tabular-nums text-slate-400">{idx + 1}</td>
                     <td className="px-3 py-2 font-medium text-slate-900">{row.product}</td>
-                    <td className="px-3 py-2 text-slate-600">{row.category}</td>
+                    <td className="px-3 py-2 text-slate-600" title={row.category}>
+                      {formatShortCategory(row.category, 34)}
+                    </td>
                     <td className="px-3 py-2">
                       <span
                         className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${

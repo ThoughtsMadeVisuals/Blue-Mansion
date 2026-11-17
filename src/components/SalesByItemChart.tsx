@@ -14,7 +14,13 @@ import {
 import { ArrowDown, ArrowUp, BarChart2, Search, TrendingUp, X } from 'lucide-react';
 import type { FilterState, ParsedDataset } from '../types/pos';
 import { aggregateItemTrend, type ItemAggRow } from '../utils/aggregator';
-import { formatCompactRM, formatInt, formatRM, formatShortDate } from '../utils/formatters';
+import {
+  formatCompactRM,
+  formatInt,
+  formatRM,
+  formatShortCategory,
+  formatShortDate,
+} from '../utils/formatters';
 
 interface SalesByItemChartProps {
   items: ItemAggRow[];
@@ -89,7 +95,7 @@ export const SalesByItemChart: React.FC<SalesByItemChartProps> = ({
   const metricLabel =
     sortBy === 'totalQty' ? 'Qty Sold' : sortBy === 'avgPrice' ? 'Avg Price (RM)' : 'Sales (RM)';
 
-  const chartHeight = Math.max(260, chartData.length * 32 + 40);
+  const chartHeight = Math.max(280, chartData.length * 36 + 40);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-5">
@@ -140,8 +146,8 @@ export const SalesByItemChart: React.FC<SalesByItemChartProps> = ({
           >
             <option value="All">All Categories</option>
             {allCategories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
+              <option key={cat} value={cat} title={cat}>
+                {formatShortCategory(cat, 32)}
               </option>
             ))}
           </select>
@@ -234,9 +240,30 @@ export const SalesByItemChart: React.FC<SalesByItemChartProps> = ({
                 dataKey="shortName"
                 axisLine={false}
                 tickLine={false}
-                width={175}
-                tick={{ fontSize: 11, fill: '#334155' }}
+                width={185}
                 interval={0}
+                tick={(props: {
+                  x?: number | string;
+                  y?: number | string;
+                  payload?: { value?: string };
+                }) => {
+                  const label = String(props.payload?.value ?? '');
+                  return (
+                    <g transform={`translate(${Number(props.x ?? 0)},${Number(props.y ?? 0)})`}>
+                      <title>{label}</title>
+                      <text
+                        x={-6}
+                        y={0}
+                        dy={4}
+                        textAnchor="end"
+                        fill="#334155"
+                        fontSize={11}
+                      >
+                        {label}
+                      </text>
+                    </g>
+                  );
+                }}
               />
               <Tooltip
                 formatter={(value: number) => [

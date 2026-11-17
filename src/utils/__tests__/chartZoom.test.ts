@@ -5,6 +5,7 @@ import {
   computeZoomedRange,
   getFullRange,
 } from '../chartZoom';
+import { formatShortCategory, formatShortDate } from '../formatters';
 
 describe('chartZoom', () => {
   it('returns full range for valid and empty datasets', () => {
@@ -48,5 +49,28 @@ describe('chartZoom', () => {
   it('clamps out-of-bounds ranges safely', () => {
     expect(clampRange({ start: -5, end: 50 }, 12)).toEqual({ start: 0, end: 11 });
     expect(clampRange({ start: 20, end: 25 }, 12)).toEqual({ start: 11, end: 11 });
+  });
+
+  it('formats long hierarchical Odoo POS categories and dates cleanly', () => {
+    expect(
+      formatShortCategory(
+        'Mangga All Day (New) / ALL DAY DINING (M-ALM) / BIG PLATES (M-ALM)'
+      )
+    ).toBe('All Day Dining · Big Plates');
+    expect(
+      formatShortCategory('Mangga All Day (New) / SWEETS (M-ALM)')
+    ).toBe('All Day · Sweets');
+    expect(
+      formatShortCategory(
+        'Mangga All Day (New) / REFRESHERS (M-ALM) / FRESH JUICES (M-ALM)'
+      )
+    ).toBe('Refreshers · Fresh Juices');
+    expect(
+      formatShortCategory('Mangga All Day (New) / ENEGISERS (M-ALM) / COFFEE (M-ALM)')
+    ).toBe('Enegisers · Coffee');
+    expect(formatShortCategory('Soft Drinks (Mangga) / Boocha')).toBe(
+      'Soft Drinks · Boocha'
+    );
+    expect(formatShortDate('2024-06-14')).toBe('14 Jun');
   });
 });
