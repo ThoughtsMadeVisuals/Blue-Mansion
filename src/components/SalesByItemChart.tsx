@@ -373,7 +373,7 @@ export const SalesByItemChart: React.FC<SalesByItemChartProps> = ({
                       <YAxis
                         axisLine={false}
                         tickLine={false}
-                        width={48}
+                        width={58}
                         tickFormatter={(v) =>
                           trendMetric === 'sales' ? formatCompactRM(Number(v)) : formatInt(Number(v))
                         }
@@ -423,7 +423,7 @@ export const SalesByItemChart: React.FC<SalesByItemChartProps> = ({
                       <YAxis
                         axisLine={false}
                         tickLine={false}
-                        width={48}
+                        width={58}
                         tickFormatter={(v) =>
                           trendMetric === 'sales' ? formatCompactRM(Number(v)) : formatInt(Number(v))
                         }

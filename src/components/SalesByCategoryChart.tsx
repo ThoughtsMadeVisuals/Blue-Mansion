@@ -51,7 +51,7 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({
       data={topCategories}
       getLabel={(item) => item.category}
       headerExtra={foodVsBevPills}
-      heightClass="h-80"
+      heightClass="h-96"
       emptyState={
         topCategories.length === 0 ? (
           <div className="py-12 text-center text-xs text-slate-400">
@@ -64,26 +64,25 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={visibleData}
-            margin={{ top: 10, right: 16, left: 0, bottom: 16 }}
+            layout="vertical"
+            margin={{ top: 6, right: 24, left: 8, bottom: 6 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
             <XAxis
+              type="number"
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => formatCompactRM(Number(v))}
+              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
+            />
+            <YAxis
+              type="category"
               dataKey="category"
               axisLine={false}
               tickLine={false}
-              tickMargin={8}
-              tickFormatter={(val: string) =>
-                val.length > 16 ? `${val.slice(0, 15)}…` : val
-              }
-              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
+              width={150}
+              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#334155' }}
               interval={0}
-            />
-            <YAxis
-              axisLine={false}
-              tickLine={false}
-              width={56}
-              tickFormatter={(v) => formatCompactRM(Number(v))}
-              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
             />
             <Tooltip
               formatter={(value: number) => [formatRM(value), 'Sales']}
@@ -97,8 +96,8 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({
               dataKey="totalSales"
               name={`${outletLabel} Sales`}
               fill={accentColor}
-              maxBarSize={48}
-              radius={[6, 6, 0, 0]}
+              maxBarSize={24}
+              radius={[0, 6, 6, 0]}
               isAnimationActive={false}
             />
           </BarChart>
