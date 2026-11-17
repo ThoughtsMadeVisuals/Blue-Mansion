@@ -27,9 +27,22 @@ export const SalesByHoursChart: React.FC<SalesByHoursChartProps> = ({
   accentColor,
 }) => {
   const [metric, setMetric] = useState<'sales' | 'tx' | 'guests'>('sales');
+  const [hoursScope, setHoursScope] = useState<'active' | 'all'>('active');
 
   const dataKey =
     metric === 'sales' ? 'totalSales' : metric === 'tx' ? 'totalTx' : 'totalGuests';
+
+  const filteredHours = React.useMemo(() => {
+    if (hoursScope === 'all' || salesByHour.length === 0) return salesByHour;
+    const activeIndices = salesByHour
+      .map((row, idx) => (row.totalSales > 0 || row.totalTx > 0 || row.totalGuests > 0 ? idx : -1))
+      .filter((idx) => idx >= 0);
+    if (activeIndices.length === 0) return salesByHour;
+    const firstIdx = Math.max(0, activeIndices[0] - 1);
+    const lastIdx = Math.min(salesByHour.length - 1, activeIndices[activeIndices.length - 1] + 1);
+    return salesByHour.slice(firstIdx, lastIdx + 1);
+  }, [hoursScope, salesByHour]);
+
   const peakHour = [...salesByHour].sort((a, b) => b[dataKey] - a[dataKey])[0];
   const peakValueFormatted =
     peakHour && peakHour[dataKey] > 0
@@ -44,15 +57,37 @@ export const SalesByHoursChart: React.FC<SalesByHoursChartProps> = ({
     <div className="flex flex-wrap items-center gap-2">
       {peakHour && peakValueFormatted && (
         <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-          Peak Hour: <strong>{peakHour.label}</strong> ({peakValueFormatted})
+          Peak: <strong>{peakHour.label}</strong> ({peakValueFormatted})
         </span>
       )}
 
       <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 print:hidden">
         {(
           [
-            ['sales', 'Sales (RM)'],
-            ['tx', 'Transactions'],
+            ['active', 'Active Hours'],
+            ['all', '24h'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setHoursScope(key)}
+            className={`rounded-lg px-2 py-1 text-xs font-medium cursor-pointer ${
+              hoursScope === key
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 print:hidden">
+        {(
+          [
+            ['sales', 'Sales'],
+            ['tx', 'Orders'],
             ['guests', 'Guests'],
           ] as const
         ).map(([key, label]) => (
@@ -76,8 +111,8 @@ export const SalesByHoursChart: React.FC<SalesByHoursChartProps> = ({
   return (
     <ZoomableChartSection
       title="Sales by Hours"
-      subtitle={`${outletLabel} · Hourly performance (00:00 – 23:00)`}
-      data={hasHourly ? salesByHour : []}
+      subtitle={`${outletLabel} · Hourly performance`}
+      data={hasHourly ? filteredHours : []}
       getLabel={(item) => item.label}
       headerExtra={headerControls}
       emptyState={
@@ -97,17 +132,24 @@ export const SalesByHoursChart: React.FC<SalesByHoursChartProps> = ({
     >
       {(visibleData, isExpanded) => (
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={visibleData} margin={{ top: 10, right: 16, left: 4, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <AreaChart data={visibleData} margin={{ top: 10, right: 16, left: 0, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
+              axisLine={false}
+              tickLine={false}
+              tickMargin={8}
+              minTickGap={22}
+              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
             />
             <YAxis
+              axisLine={false}
+              tickLine={false}
+              width={56}
               tickFormatter={(v) =>
                 metric === 'sales' ? formatCompactRM(Number(v)) : formatInt(Number(v))
               }
-              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
+              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
             />
             <Tooltip
               formatter={(value: number) => [

@@ -14,7 +14,7 @@ import {
 import { ArrowDown, ArrowUp, BarChart2, Search, TrendingUp, X } from 'lucide-react';
 import type { FilterState, ParsedDataset } from '../types/pos';
 import { aggregateItemTrend, type ItemAggRow } from '../utils/aggregator';
-import { formatCompactRM, formatInt, formatRM } from '../utils/formatters';
+import { formatCompactRM, formatInt, formatRM, formatShortDate } from '../utils/formatters';
 
 interface SalesByItemChartProps {
   items: ItemAggRow[];
@@ -43,7 +43,7 @@ export const SalesByItemChart: React.FC<SalesByItemChartProps> = ({
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [sortBy, setSortBy] = useState<ChartSortField>('totalSales');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [limit, setLimit] = useState<number>(15);
+  const [limit, setLimit] = useState<number>(10);
   const [trendMetric, setTrendMetric] = useState<'sales' | 'qty'>('sales');
 
   const chartData = useMemo(() => {
@@ -219,17 +219,21 @@ export const SalesByItemChart: React.FC<SalesByItemChartProps> = ({
               layout="vertical"
               margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
               <XAxis
                 type="number"
+                axisLine={false}
+                tickLine={false}
                 tickFormatter={(v) =>
                   sortBy === 'totalQty' ? formatInt(Number(v)) : formatCompactRM(Number(v))
                 }
-                tick={{ fontSize: 11, fill: '#475569' }}
+                tick={{ fontSize: 11, fill: '#64748b' }}
               />
               <YAxis
                 type="category"
                 dataKey="shortName"
+                axisLine={false}
+                tickLine={false}
                 width={175}
                 tick={{ fontSize: 11, fill: '#334155' }}
                 interval={0}
@@ -255,6 +259,7 @@ export const SalesByItemChart: React.FC<SalesByItemChartProps> = ({
               <Bar
                 dataKey={metricKey}
                 name={metricLabel}
+                maxBarSize={24}
                 radius={[0, 6, 6, 0]}
                 className="cursor-pointer"
                 onClick={(barData) => {
@@ -356,15 +361,26 @@ export const SalesByItemChart: React.FC<SalesByItemChartProps> = ({
                 <div className="h-52 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={itemTrend.daily} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="dateKey" tick={{ fontSize: 10, fill: '#475569' }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis
+                        dataKey="dateKey"
+                        tickFormatter={formatShortDate}
+                        axisLine={false}
+                        tickLine={false}
+                        minTickGap={20}
+                        tick={{ fontSize: 10, fill: '#64748b' }}
+                      />
                       <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        width={48}
                         tickFormatter={(v) =>
                           trendMetric === 'sales' ? formatCompactRM(Number(v)) : formatInt(Number(v))
                         }
-                        tick={{ fontSize: 10, fill: '#475569' }}
+                        tick={{ fontSize: 10, fill: '#64748b' }}
                       />
                       <Tooltip
+                        labelFormatter={(label) => `${formatShortDate(String(label))} (${String(label)})`}
                         formatter={(value: number) => [
                           trendMetric === 'sales' ? formatRM(value) : formatInt(value),
                           trendMetric === 'sales' ? 'Sales' : 'Qty',
@@ -374,6 +390,7 @@ export const SalesByItemChart: React.FC<SalesByItemChartProps> = ({
                       <Bar
                         dataKey={trendMetric}
                         fill="#4f46e5"
+                        maxBarSize={28}
                         radius={[4, 4, 0, 0]}
                       />
                     </BarChart>
@@ -395,13 +412,22 @@ export const SalesByItemChart: React.FC<SalesByItemChartProps> = ({
                 <div className="h-52 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={itemTrend.hourly} margin={{ top: 6, right: 12, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#475569' }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        axisLine={false}
+                        tickLine={false}
+                        minTickGap={20}
+                        tick={{ fontSize: 10, fill: '#64748b' }}
+                      />
                       <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        width={48}
                         tickFormatter={(v) =>
                           trendMetric === 'sales' ? formatCompactRM(Number(v)) : formatInt(Number(v))
                         }
-                        tick={{ fontSize: 10, fill: '#475569' }}
+                        tick={{ fontSize: 10, fill: '#64748b' }}
                       />
                       <Tooltip
                         formatter={(value: number) => [

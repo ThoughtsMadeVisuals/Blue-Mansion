@@ -14,3 +14,27 @@ export function formatCompactRM(value: number): string {
 export function formatInt(value: number): string {
   return Math.round(value).toLocaleString('en-MY');
 }
+
+const SHORT_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+export function formatShortDate(dateKey: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!match) return dateKey;
+  const monthIdx = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const month = SHORT_MONTHS[monthIdx];
+  return month ? `${day} ${month}` : dateKey;
+}

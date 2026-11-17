@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import type { DailyAggRow } from '../utils/aggregator';
 import type { DatasetCapabilities } from '../types/pos';
-import { formatInt } from '../utils/formatters';
+import { formatInt, formatShortDate } from '../utils/formatters';
 import { ZoomableChartSection } from './ZoomableChartSection';
 
 interface GuestsAndTransactionsPanelProps {
@@ -55,14 +55,25 @@ export const GuestsAndTransactionsPanel: React.FC<GuestsAndTransactionsPanelProp
       >
         {(visibleData, isExpanded) => (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={visibleData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <BarChart data={visibleData} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis
                 dataKey="dateKey"
-                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
+                tickFormatter={formatShortDate}
+                axisLine={false}
+                tickLine={false}
+                tickMargin={8}
+                minTickGap={24}
+                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
               />
-              <YAxis tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }} />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                width={44}
+                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
+              />
               <Tooltip
+                labelFormatter={(label) => `${formatShortDate(String(label))} (${String(label)})`}
                 formatter={(v: number) => [formatInt(v), 'Guests']}
                 contentStyle={{ borderRadius: '12px', fontSize: '12px' }}
               />
@@ -70,6 +81,7 @@ export const GuestsAndTransactionsPanel: React.FC<GuestsAndTransactionsPanelProp
                 dataKey="totalGuests"
                 name={`${outletLabel} Guests`}
                 fill={accentColor}
+                maxBarSize={32}
                 radius={[4, 4, 0, 0]}
                 isAnimationActive={false}
               />
@@ -103,14 +115,25 @@ export const GuestsAndTransactionsPanel: React.FC<GuestsAndTransactionsPanelProp
       >
         {(visibleData, isExpanded) => (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={visibleData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <BarChart data={visibleData} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis
                 dataKey="dateKey"
-                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
+                tickFormatter={formatShortDate}
+                axisLine={false}
+                tickLine={false}
+                tickMargin={8}
+                minTickGap={24}
+                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
               />
-              <YAxis tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }} />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                width={44}
+                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
+              />
               <Tooltip
+                labelFormatter={(label) => `${formatShortDate(String(label))} (${String(label)})`}
                 formatter={(v: number) => [formatInt(v), 'Transactions']}
                 contentStyle={{ borderRadius: '12px', fontSize: '12px' }}
               />
@@ -118,6 +141,7 @@ export const GuestsAndTransactionsPanel: React.FC<GuestsAndTransactionsPanelProp
                 dataKey="totalTx"
                 name={`${outletLabel} Transactions`}
                 fill={accentColor}
+                maxBarSize={32}
                 radius={[4, 4, 0, 0]}
                 isAnimationActive={false}
               />

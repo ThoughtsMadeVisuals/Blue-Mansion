@@ -11,7 +11,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { DailyAggRow } from '../utils/aggregator';
-import { formatCompactRM, formatRM } from '../utils/formatters';
+import { formatCompactRM, formatRM, formatShortDate } from '../utils/formatters';
 import { ZoomableChartSection } from './ZoomableChartSection';
 
 interface DailySalesChartProps {
@@ -62,16 +62,25 @@ export const DailySalesChart: React.FC<DailySalesChartProps> = ({
                 }
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis
                 dataKey="dateKey"
-                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
+                tickFormatter={formatShortDate}
+                axisLine={false}
+                tickLine={false}
+                tickMargin={8}
+                minTickGap={24}
+                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
               />
               <YAxis
+                axisLine={false}
+                tickLine={false}
+                width={56}
                 tickFormatter={(v) => formatCompactRM(Number(v))}
-                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
+                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
               />
               <Tooltip
+                labelFormatter={(label) => `${formatShortDate(String(label))} (${String(label)})`}
                 formatter={(value: number) => [formatRM(value), 'Daily Sales']}
                 contentStyle={{
                   borderRadius: '12px',
@@ -85,7 +94,8 @@ export const DailySalesChart: React.FC<DailySalesChartProps> = ({
                 name={outletLabel}
                 stroke={accentColor}
                 strokeWidth={2.5}
-                dot={{ r: isExpanded ? 4 : 3 }}
+                dot={visibleData.length <= 20 ? { r: isExpanded ? 4 : 3 } : false}
+                activeDot={{ r: 5 }}
                 isAnimationActive={false}
               />
             </LineChart>
@@ -115,16 +125,25 @@ export const DailySalesChart: React.FC<DailySalesChartProps> = ({
             data={visibleData}
             margin={{ top: 10, right: 16, left: 4, bottom: 0 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
             <XAxis
               dataKey="dateKey"
-              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
+              tickFormatter={formatShortDate}
+              axisLine={false}
+              tickLine={false}
+              tickMargin={8}
+              minTickGap={24}
+              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
             />
             <YAxis
+              axisLine={false}
+              tickLine={false}
+              width={56}
               tickFormatter={(v) => formatCompactRM(Number(v))}
-              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
+              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
             />
             <Tooltip
+              labelFormatter={(label) => `${formatShortDate(String(label))} (${String(label)})`}
               formatter={(value: number) => [formatRM(value), 'Expected']}
               contentStyle={{
                 borderRadius: '12px',
@@ -136,6 +155,7 @@ export const DailySalesChart: React.FC<DailySalesChartProps> = ({
               dataKey="expected"
               name="Daily Session Expected"
               fill={accentColor}
+              maxBarSize={36}
               radius={[4, 4, 0, 0]}
               isAnimationActive={false}
             />

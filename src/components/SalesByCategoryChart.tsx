@@ -64,20 +64,26 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={visibleData}
-            margin={{ top: 10, right: 16, left: 4, bottom: 36 }}
+            margin={{ top: 10, right: 16, left: 0, bottom: 16 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
             <XAxis
               dataKey="category"
-              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
-              angle={-25}
-              textAnchor="end"
+              axisLine={false}
+              tickLine={false}
+              tickMargin={8}
+              tickFormatter={(val: string) =>
+                val.length > 16 ? `${val.slice(0, 15)}…` : val
+              }
+              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
               interval={0}
-              height={60}
             />
             <YAxis
+              axisLine={false}
+              tickLine={false}
+              width={56}
               tickFormatter={(v) => formatCompactRM(Number(v))}
-              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
+              tick={{ fontSize: isExpanded ? 12 : 11, fill: '#64748b' }}
             />
             <Tooltip
               formatter={(value: number) => [formatRM(value), 'Sales']}
@@ -91,6 +97,7 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({
               dataKey="totalSales"
               name={`${outletLabel} Sales`}
               fill={accentColor}
+              maxBarSize={48}
               radius={[6, 6, 0, 0]}
               isAnimationActive={false}
             />
