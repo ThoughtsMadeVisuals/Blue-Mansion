@@ -145,6 +145,11 @@ export function inferOutletFromHeuristics(
   return 'Unassigned';
 }
 
+function matchesKeyword(text: string, keyword: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}(?:s|es)?\\b`, 'i').test(text);
+}
+
 export function inferFoodBev(
   category: string,
   product: string,
@@ -157,17 +162,17 @@ export function inferFoodBev(
   const catNorm = category.toLowerCase();
   const prodNorm = product.toLowerCase();
 
-  for (const kw of BEVERAGE_KEYWORDS) {
-    if (catNorm.includes(kw)) return 'Beverage';
-  }
   for (const kw of FOOD_KEYWORDS) {
-    if (catNorm.includes(kw)) return 'Food';
+    if (matchesKeyword(catNorm, kw)) return 'Food';
   }
   for (const kw of BEVERAGE_KEYWORDS) {
-    if (prodNorm.includes(kw)) return 'Beverage';
+    if (matchesKeyword(catNorm, kw)) return 'Beverage';
   }
   for (const kw of FOOD_KEYWORDS) {
-    if (prodNorm.includes(kw)) return 'Food';
+    if (matchesKeyword(prodNorm, kw)) return 'Food';
+  }
+  for (const kw of BEVERAGE_KEYWORDS) {
+    if (matchesKeyword(prodNorm, kw)) return 'Beverage';
   }
 
   return 'Other';

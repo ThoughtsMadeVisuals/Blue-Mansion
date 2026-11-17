@@ -28,15 +28,23 @@ export const SalesByHoursChart: React.FC<SalesByHoursChartProps> = ({
 }) => {
   const [metric, setMetric] = useState<'sales' | 'tx' | 'guests'>('sales');
 
-  const peakHour = [...salesByHour].sort((a, b) => b.totalSales - a.totalSales)[0];
   const dataKey =
     metric === 'sales' ? 'totalSales' : metric === 'tx' ? 'totalTx' : 'totalGuests';
+  const peakHour = [...salesByHour].sort((a, b) => b[dataKey] - a[dataKey])[0];
+  const peakValueFormatted =
+    peakHour && peakHour[dataKey] > 0
+      ? metric === 'sales'
+        ? formatRM(peakHour.totalSales)
+        : metric === 'tx'
+          ? `${formatInt(peakHour.totalTx)} tx`
+          : `${formatInt(peakHour.totalGuests)} guests`
+      : null;
 
   const headerControls = hasHourly ? (
     <div className="flex flex-wrap items-center gap-2">
-      {peakHour && peakHour.totalSales > 0 && (
+      {peakHour && peakValueFormatted && (
         <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-          Peak Hour: <strong>{peakHour.label}</strong> ({formatRM(peakHour.totalSales)})
+          Peak Hour: <strong>{peakHour.label}</strong> ({peakValueFormatted})
         </span>
       )}
 
