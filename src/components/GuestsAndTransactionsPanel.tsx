@@ -4,7 +4,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -13,15 +12,20 @@ import {
 import type { DailyAggRow } from '../utils/aggregator';
 import type { DatasetCapabilities } from '../types/pos';
 import { formatInt } from '../utils/formatters';
+import { ZoomableChartSection } from './ZoomableChartSection';
 
 interface GuestsAndTransactionsPanelProps {
   dailySales: DailyAggRow[];
   capabilities: DatasetCapabilities;
+  outletLabel: string;
+  accentColor: string;
 }
 
 export const GuestsAndTransactionsPanel: React.FC<GuestsAndTransactionsPanelProps> = ({
   dailySales,
   capabilities,
+  outletLabel,
+  accentColor,
 }) => {
   const showTx = capabilities.hasOrderLevelTransactions && dailySales.length > 0;
   const showGuests = capabilities.hasGuests && dailySales.length > 0;
@@ -29,85 +33,98 @@ export const GuestsAndTransactionsPanel: React.FC<GuestsAndTransactionsPanelProp
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {/* Amount of Guest */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-base font-bold text-slate-900">Amount of Guest (Daily)</h2>
-          <p className="text-xs text-slate-500">
-            Total covers/guests per day comparing Mangga vs. Indigo Bar
-          </p>
-        </div>
-
-        {!showGuests ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-amber-200 bg-amber-50/50 py-10 text-center">
-            <Users className="mb-2 h-6 w-6 text-amber-500" />
-            <p className="text-sm font-medium text-slate-800">
-              Guest counts require an Odoo Orders CSV/Excel export
-            </p>
-            <p className="mt-1 max-w-sm text-xs text-slate-500">
-              Include the <code>Guests</code> / <code>Customer Count</code> column when exporting
-              from Odoo POS.
-            </p>
-          </div>
-        ) : (
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailySales} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="dateKey" tick={{ fontSize: 11, fill: '#475569' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#475569' }} />
-                <Tooltip
-                  formatter={(v: number, name: string) => [formatInt(v), name]}
-                  contentStyle={{ borderRadius: '12px', fontSize: '12px' }}
-                />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Bar dataKey="manggaGuests" name="Mangga Guests" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="indigoGuests" name="Indigo Bar Guests" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+      <ZoomableChartSection
+        title="Amount of Guest (Daily)"
+        subtitle={`${outletLabel} · Total covers/guests per day`}
+        data={showGuests ? dailySales : []}
+        getLabel={(item) => item.dateKey}
+        heightClass="h-64"
+        emptyState={
+          !showGuests ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-amber-200 bg-amber-50/50 py-10 text-center">
+              <Users className="mb-2 h-6 w-6 text-amber-500" />
+              <p className="text-sm font-medium text-slate-800">
+                Guest counts require an Odoo Orders CSV/Excel export
+              </p>
+              <p className="mt-1 max-w-sm text-xs text-slate-500">
+                Include the <code>Guests</code> column when exporting from Odoo POS.
+              </p>
+            </div>
+          ) : undefined
+        }
+      >
+        {(visibleData, isExpanded) => (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={visibleData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis
+                dataKey="dateKey"
+                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
+              />
+              <YAxis tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }} />
+              <Tooltip
+                formatter={(v: number) => [formatInt(v), 'Guests']}
+                contentStyle={{ borderRadius: '12px', fontSize: '12px' }}
+              />
+              <Bar
+                dataKey="totalGuests"
+                name={`${outletLabel} Guests`}
+                fill={accentColor}
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+            </BarChart>
+          </ResponsiveContainer>
         )}
-      </section>
+      </ZoomableChartSection>
 
       {/* Transactions */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-base font-bold text-slate-900">Transactions (Daily)</h2>
-          <p className="text-xs text-slate-500">
-            Distinct POS orders/receipts per day comparing Mangga vs. Indigo Bar
-          </p>
-        </div>
-
-        {!showTx ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
-            <p className="text-sm font-medium text-slate-700">
-              {capabilities.totalPdfTransactions
-                ? `Total Combined Transactions (PDF): ${formatInt(capabilities.totalPdfTransactions)}`
-                : 'No order-level transactions available'}
-            </p>
-            <p className="mt-1 max-w-sm text-xs text-slate-500">
-              Upload an Odoo Orders CSV/Excel export with <code>Order Ref</code> and{' '}
-              <code>Order Date</code> to break down transactions by day and outlet.
-            </p>
-          </div>
-        ) : (
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailySales} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="dateKey" tick={{ fontSize: 11, fill: '#475569' }} />
-                <YAxis tick={{ fontSize: 11, fill: '#475569' }} />
-                <Tooltip
-                  formatter={(v: number, name: string) => [formatInt(v), name]}
-                  contentStyle={{ borderRadius: '12px', fontSize: '12px' }}
-                />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Bar dataKey="manggaTx" name="Mangga Orders" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="indigoTx" name="Indigo Bar Orders" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+      <ZoomableChartSection
+        title="Transactions (Daily)"
+        subtitle={`${outletLabel} · Distinct POS orders/receipts per day`}
+        data={showTx ? dailySales : []}
+        getLabel={(item) => item.dateKey}
+        heightClass="h-64"
+        emptyState={
+          !showTx ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
+              <p className="text-sm font-medium text-slate-700">
+                {capabilities.totalPdfTransactions
+                  ? `Total Combined Transactions (PDF): ${formatInt(capabilities.totalPdfTransactions)}`
+                  : 'No order-level transactions available'}
+              </p>
+              <p className="mt-1 max-w-sm text-xs text-slate-500">
+                Upload an Odoo Orders CSV/Excel export with <code>Order Ref</code> and{' '}
+                <code>Date</code> to break down transactions by day.
+              </p>
+            </div>
+          ) : undefined
+        }
+      >
+        {(visibleData, isExpanded) => (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={visibleData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis
+                dataKey="dateKey"
+                tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }}
+              />
+              <YAxis tick={{ fontSize: isExpanded ? 12 : 11, fill: '#475569' }} />
+              <Tooltip
+                formatter={(v: number) => [formatInt(v), 'Transactions']}
+                contentStyle={{ borderRadius: '12px', fontSize: '12px' }}
+              />
+              <Bar
+                dataKey="totalTx"
+                name={`${outletLabel} Transactions`}
+                fill={accentColor}
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+            </BarChart>
+          </ResponsiveContainer>
         )}
-      </section>
+      </ZoomableChartSection>
     </div>
   );
 };

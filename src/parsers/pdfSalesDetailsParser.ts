@@ -195,6 +195,17 @@ export function parseSalesDetailsTextLines(
       dateRangeLabel,
       sourceFiles: [fileName],
     },
+    fileSummaries: [
+      {
+        fileName,
+        lineCount: lines.length,
+        outlets: ['PDF Summary'],
+        dateFrom: null,
+        dateTo: null,
+        hasHourly: false,
+        hasGuests: false,
+      },
+    ],
     warnings,
   };
 }

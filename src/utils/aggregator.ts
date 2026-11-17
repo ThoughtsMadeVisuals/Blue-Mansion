@@ -96,8 +96,31 @@ export interface AggregatedReport {
   dailySales: DailyAggRow[];
   dailyPaymentsFallback: { dateKey: string; expected: number; counted: number }[];
   dateBounds: { min: string; max: string } | null;
+  availableDates: string[];
   allCategories: string[];
+  allProducts: string[];
   unassignedItemsCount: number;
+}
+
+export interface ItemDailyPoint {
+  dateKey: string;
+  qty: number;
+  sales: number;
+}
+
+export interface ItemHourlyPoint {
+  hour: number;
+  label: string;
+  qty: number;
+  sales: number;
+}
+
+export interface ItemTrendResult {
+  product: string;
+  totalQty: number;
+  totalSales: number;
+  daily: ItemDailyPoint[];
+  hourly: ItemHourlyPoint[];
 }
 
 export function reapplyMappings(
@@ -139,16 +162,19 @@ export function aggregateDataset(
     .map((l) => l.dateKey)
     .filter((d): d is string => Boolean(d))
     .sort();
+  const availableDates = Array.from(new Set(allDates));
   const dateBounds =
-    allDates.length > 0
-      ? { min: allDates[0], max: allDates[allDates.length - 1] }
+    availableDates.length > 0
+      ? { min: availableDates[0], max: availableDates[availableDates.length - 1] }
       : null;
 
   const categorySet = new Set<string>();
+  const productSet = new Set<string>();
   let unassignedItemsCount = 0;
 
   for (const l of dataset.lines) {
     categorySet.add(l.category);
+    productSet.add(l.product);
     if (l.outlet === 'Unassigned') unassignedItemsCount++;
   }
 
@@ -454,7 +480,62 @@ export function aggregateDataset(
     dailySales,
     dailyPaymentsFallback,
     dateBounds,
+    availableDates,
     allCategories: Array.from(categorySet).sort(),
+    allProducts: Array.from(productSet).sort(),
     unassignedItemsCount,
+  };
+}
+
+export function aggregateItemTrend(
+  dataset: ParsedDataset,
+  filters: FilterState,
+  productName: string
+): ItemTrendResult {
+  const dailyMap = new Map<string, ItemDailyPoint>();
+  const hourly: ItemHourlyPoint[] = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    label: `${String(hour).padStart(2, '0')}:00`,
+    qty: 0,
+    sales: 0,
+  }));
+
+  let totalQty = 0;
+  let totalSales = 0;
+  const target = productName.toLowerCase();
+
+  for (const line of dataset.lines) {
+    if (line.product.toLowerCase() !== target) continue;
+    if (!matchesOutletFilter(line, filters.outletFilter)) continue;
+    if (filters.foodBevFilter !== 'All' && line.foodBev !== filters.foodBevFilter) continue;
+    if (filters.dateFrom && line.dateKey && line.dateKey < filters.dateFrom) continue;
+    if (filters.dateTo && line.dateKey && line.dateKey > filters.dateTo) continue;
+
+    totalQty += line.qty;
+    totalSales += line.subtotal;
+
+    if (line.dateKey) {
+      const existing = dailyMap.get(line.dateKey) ?? {
+        dateKey: line.dateKey,
+        qty: 0,
+        sales: 0,
+      };
+      existing.qty += line.qty;
+      existing.sales += line.subtotal;
+      dailyMap.set(line.dateKey, existing);
+    }
+
+    if (line.hour !== null && line.hour >= 0 && line.hour < 24) {
+      hourly[line.hour].qty += line.qty;
+      hourly[line.hour].sales += line.subtotal;
+    }
+  }
+
+  return {
+    product: productName,
+    totalQty,
+    totalSales,
+    daily: Array.from(dailyMap.values()).sort((a, b) => a.dateKey.localeCompare(b.dateKey)),
+    hourly,
   };
 }

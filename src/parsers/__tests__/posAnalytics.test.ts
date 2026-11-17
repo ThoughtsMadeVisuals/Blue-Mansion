@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeRows, parseDateTime, parseNumber } from '../csvXlsxParser';
 import { parseSalesDetailsTextLines } from '../pdfSalesDetailsParser';
-import { aggregateDataset } from '../../utils/aggregator';
+import { aggregateDataset, aggregateItemTrend } from '../../utils/aggregator';
 import { createDefaultMappingRules } from '../../utils/defaultMappings';
 import type { FilterState } from '../../types/pos';
 
@@ -115,5 +115,78 @@ describe('pdfSalesDetailsParser', () => {
     expect(dataset.capabilities.totalPdfTransactions).toBe(85);
     expect(dataset.pdfDailySessions).toHaveLength(1);
     expect(dataset.pdfDailySessions[0].dateKey).toBe('2024-06-14');
+  });
+});
+
+describe('aggregator date & item search + trend', () => {
+  it('filters by particular date and item search, and computes item daily/hourly trend', () => {
+    const rules = createDefaultMappingRules();
+    const rows = [
+      {
+        'Order Ref': 'POS/001',
+        'Order Date': '2024-06-14 10:15:00',
+        'Session / Point of Sale': 'Mangga (Day)',
+        Guests: 2,
+        'Lines / Product': 'Nyonya Laksa',
+        'Lines / Product / POS Product Category': 'Mains',
+        'Lines / Quantity': 2,
+        'Lines / Subtotal': 68,
+      },
+      {
+        'Order Ref': 'POS/002',
+        'Order Date': '2024-06-15 14:20:00',
+        'Session / Point of Sale': 'Mangga (Day)',
+        Guests: 1,
+        'Lines / Product': 'Nyonya Laksa',
+        'Lines / Product / POS Product Category': 'Mains',
+        'Lines / Quantity': 1,
+        'Lines / Subtotal': 34,
+      },
+      {
+        'Order Ref': 'POS/003',
+        'Order Date': '2024-06-15 19:00:00',
+        'Session / Point of Sale': 'Mangga (Dinner)',
+        Guests: 2,
+        'Lines / Product': 'Flat White',
+        'Lines / Product / POS Product Category': 'Coffee & Tea',
+        'Lines / Quantity': 2,
+        'Lines / Subtotal': 30,
+      },
+    ];
+
+    const dataset = normalizeRows(rows, 'multi_day.xlsx', rules);
+
+    // Full report exposes availableDates and allProducts
+    const fullReport = aggregateDataset(dataset, DEFAULT_FILTERS);
+    expect(fullReport.availableDates).toEqual(['2024-06-14', '2024-06-15']);
+    expect(fullReport.allProducts).toEqual(['Flat White', 'Nyonya Laksa']);
+
+    // Single date filter
+    const singleDayReport = aggregateDataset(dataset, {
+      ...DEFAULT_FILTERS,
+      dateFrom: '2024-06-15',
+      dateTo: '2024-06-15',
+    });
+    expect(singleDayReport.kpis.total.sales).toBeCloseTo(64);
+    expect(singleDayReport.salesByItem).toHaveLength(2);
+
+    // Item search filter
+    const itemSearchReport = aggregateDataset(dataset, {
+      ...DEFAULT_FILTERS,
+      searchQuery: 'laksa',
+    });
+    expect(itemSearchReport.salesByItem).toHaveLength(1);
+    expect(itemSearchReport.salesByItem[0].totalQty).toBe(3);
+
+    // Item trend across days & hours
+    const trend = aggregateItemTrend(dataset, DEFAULT_FILTERS, 'Nyonya Laksa');
+    expect(trend.totalQty).toBe(3);
+    expect(trend.totalSales).toBeCloseTo(102);
+    expect(trend.daily).toEqual([
+      { dateKey: '2024-06-14', qty: 2, sales: 68 },
+      { dateKey: '2024-06-15', qty: 1, sales: 34 },
+    ]);
+    expect(trend.hourly[10].qty).toBe(2);
+    expect(trend.hourly[14].qty).toBe(1);
   });
 });

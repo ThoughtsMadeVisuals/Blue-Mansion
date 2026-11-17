@@ -6,32 +6,30 @@ import { formatInt, formatRM } from '../utils/formatters';
 interface SalesByItemTableProps {
   items: ItemAggRow[];
   totalSales: number;
+  outletLabel: string;
+  selectedProduct?: string | null;
+  onSelectProduct?: (product: string | null) => void;
 }
 
-type SortField =
-  | 'product'
-  | 'category'
-  | 'manggaQty'
-  | 'manggaSales'
-  | 'indigoQty'
-  | 'indigoSales'
-  | 'totalQty'
-  | 'totalSales';
+type SortField = 'product' | 'category' | 'foodBev' | 'totalQty' | 'totalSales';
 
 export const SalesByItemTable: React.FC<SalesByItemTableProps> = ({
   items,
   totalSales,
+  outletLabel,
+  selectedProduct,
+  onSelectProduct,
 }) => {
   const [sortField, setSortField] = useState<SortField>('totalSales');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(50);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
-      setSortDir('desc');
+      setSortDir(field === 'product' || field === 'category' ? 'asc' : 'desc');
     }
   };
 
@@ -81,13 +79,15 @@ export const SalesByItemTable: React.FC<SalesByItemTableProps> = ({
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-base font-bold text-slate-900">Sales by Item</h2>
+          <h2 className="text-base font-bold text-slate-900">
+            Sales by Item — {outletLabel}
+          </h2>
           <p className="text-xs text-slate-500">
-            Showing {visible.length} of {items.length} items — click any column header to sort
+            Showing {visible.length} of {items.length} items sold at {outletLabel} — click any column header to sort
           </p>
         </div>
         {items.length > 25 && (
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs print:hidden">
             <span className="text-slate-500">Rows:</span>
             {[25, 50, 100, items.length].map((sz) => (
               <button
@@ -107,73 +107,78 @@ export const SalesByItemTable: React.FC<SalesByItemTableProps> = ({
         )}
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50/70">
-              <SortHeader field="product" label="Item" />
-              <SortHeader field="category" label="Category" />
-              <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600">
-                Type
-              </th>
-              <SortHeader field="manggaQty" label="Mangga Qty" alignRight />
-              <SortHeader field="manggaSales" label="Mangga Sales" alignRight />
-              <SortHeader field="indigoQty" label="Indigo Qty" alignRight />
-              <SortHeader field="indigoSales" label="Indigo Sales" alignRight />
-              <SortHeader field="totalQty" label="Total Qty" alignRight />
-              <SortHeader field="totalSales" label="Total Sales" alignRight />
-              <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600">
-                Share
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {visible.map((row) => {
-              const share = totalSales > 0 ? (row.totalSales / totalSales) * 100 : 0;
-              return (
-                <tr key={`${row.product}-${row.category}`} className="hover:bg-slate-50/80">
-                  <td className="px-3 py-2 font-medium text-slate-900">{row.product}</td>
-                  <td className="px-3 py-2 text-slate-600">{row.category}</td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        row.foodBev === 'Food'
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : row.foodBev === 'Beverage'
-                            ? 'bg-indigo-50 text-indigo-700'
-                            : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {row.foodBev}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
-                    {formatInt(row.manggaQty)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
-                    {formatRM(row.manggaSales)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-indigo-700">
-                    {formatInt(row.indigoQty)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-indigo-700">
-                    {formatRM(row.indigoSales)}
-                  </td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
-                    {formatInt(row.totalQty)}
-                  </td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
-                    {formatRM(row.totalSales)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-500">
-                    {share.toFixed(1)}%
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {visible.length === 0 ? (
+        <div className="py-10 text-center text-xs text-slate-400">
+          No items found for {outletLabel} with the current filters.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/70">
+                <th className="w-10 px-3 py-2.5 text-left text-xs font-semibold text-slate-400">
+                  #
+                </th>
+                <SortHeader field="product" label="Item" />
+                <SortHeader field="category" label="Category" />
+                <SortHeader field="foodBev" label="Type" />
+                <SortHeader field="totalQty" label="Qty Sold" alignRight />
+                <SortHeader field="totalSales" label="Sales (RM)" alignRight />
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600">
+                  % Share
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {visible.map((row, idx) => {
+                const share = totalSales > 0 ? (row.totalSales / totalSales) * 100 : 0;
+                const isSelected = selectedProduct === row.product;
+                return (
+                  <tr
+                    key={`${row.product}-${row.category}`}
+                    onClick={() =>
+                      onSelectProduct?.(isSelected ? null : row.product)
+                    }
+                    className={`${
+                      onSelectProduct ? 'cursor-pointer' : ''
+                    } ${
+                      isSelected
+                        ? 'bg-indigo-50/80 hover:bg-indigo-50'
+                        : 'hover:bg-slate-50/80'
+                    }`}
+                  >
+                    <td className="px-3 py-2 tabular-nums text-slate-400">{idx + 1}</td>
+                    <td className="px-3 py-2 font-medium text-slate-900">{row.product}</td>
+                    <td className="px-3 py-2 text-slate-600">{row.category}</td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          row.foodBev === 'Food'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : row.foodBev === 'Beverage'
+                              ? 'bg-indigo-50 text-indigo-700'
+                              : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {row.foodBev}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
+                      {formatInt(row.totalQty)}
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
+                      {formatRM(row.totalSales)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">
+                      {share.toFixed(1)}%
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 };

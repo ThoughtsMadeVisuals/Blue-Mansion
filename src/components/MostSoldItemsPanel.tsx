@@ -6,11 +6,15 @@ import { formatInt, formatRM } from '../utils/formatters';
 interface MostSoldItemsPanelProps {
   topFood: ItemAggRow[];
   topBeverage: ItemAggRow[];
+  outletLabel: string;
+  accentColor: string;
 }
 
 export const MostSoldItemsPanel: React.FC<MostSoldItemsPanelProps> = ({
   topFood,
   topBeverage,
+  outletLabel,
+  accentColor,
 }) => {
   const [rankBy, setRankBy] = useState<'qty' | 'sales'>('qty');
 
@@ -19,7 +23,7 @@ export const MostSoldItemsPanel: React.FC<MostSoldItemsPanelProps> = ({
       .sort((a, b) =>
         rankBy === 'qty' ? b.totalQty - a.totalQty : b.totalSales - a.totalSales
       )
-      .slice(0, 8);
+      .slice(0, 10);
 
   const foodList = sortItems(topFood);
   const bevList = sortItems(topBeverage);
@@ -27,7 +31,7 @@ export const MostSoldItemsPanel: React.FC<MostSoldItemsPanelProps> = ({
   const renderList = (
     title: string,
     icon: React.ReactNode,
-    accentClass: string,
+    iconBgClass: string,
     items: ItemAggRow[]
   ) => {
     const maxVal =
@@ -37,15 +41,14 @@ export const MostSoldItemsPanel: React.FC<MostSoldItemsPanelProps> = ({
 
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className={`rounded-lg p-2 ${accentClass}`}>{icon}</div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-              <p className="text-xs text-slate-500">
-                Top {items.length} by {rankBy === 'qty' ? 'Quantity Sold' : 'Revenue (RM)'}
-              </p>
-            </div>
+        <div className="mb-4 flex items-center gap-2.5">
+          <div className={`rounded-lg p-2 ${iconBgClass}`}>{icon}</div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+            <p className="text-xs text-slate-500">
+              {outletLabel} · Top {items.length} by{' '}
+              {rankBy === 'qty' ? 'Quantity Sold' : 'Revenue (RM)'}
+            </p>
           </div>
         </div>
 
@@ -83,43 +86,11 @@ export const MostSoldItemsPanel: React.FC<MostSoldItemsPanelProps> = ({
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="flex h-full rounded-full"
-                        style={{ width: `${pct}%` }}
-                      >
-                        {item.manggaQty > 0 && (
-                          <div
-                            className="bg-emerald-500"
-                            style={{
-                              width: `${(item.manggaSales / Math.max(item.totalSales, 0.01)) * 100}%`,
-                            }}
-                            title={`Mangga: ${formatInt(item.manggaQty)} (${formatRM(item.manggaSales)})`}
-                          />
-                        )}
-                        {item.indigoQty > 0 && (
-                          <div
-                            className="bg-indigo-500"
-                            style={{
-                              width: `${(item.indigoSales / Math.max(item.totalSales, 0.01)) * 100}%`,
-                            }}
-                            title={`Indigo Bar: ${formatInt(item.indigoQty)} (${formatRM(item.indigoSales)})`}
-                          />
-                        )}
-                        {item.unassignedQty > 0 && (
-                          <div
-                            className="bg-slate-400"
-                            style={{
-                              width: `${(item.unassignedSales / Math.max(item.totalSales, 0.01)) * 100}%`,
-                            }}
-                          />
-                        )}
-                      </div>
-                    </div>
-                    <span className="w-28 shrink-0 text-right text-[10px] text-slate-500">
-                      M: {formatInt(item.manggaQty)} · IB: {formatInt(item.indigoQty)}
-                    </span>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${pct}%`, backgroundColor: accentColor }}
+                    />
                   </div>
                 </div>
               );
@@ -138,10 +109,10 @@ export const MostSoldItemsPanel: React.FC<MostSoldItemsPanelProps> = ({
             Most Sold Items — Food &amp; Beverage
           </h2>
           <p className="text-xs text-slate-500">
-            Green = Mangga · Indigo = Indigo Bar
+            Best-selling items for {outletLabel}
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-xl bg-slate-200/70 p-1">
+        <div className="flex items-center gap-1 rounded-xl bg-slate-200/70 p-1 print:hidden">
           <button
             type="button"
             onClick={() => setRankBy('qty')}

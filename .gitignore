@@ -18,3 +18,12 @@ npm-debug.log*
 .env
 .env.local
 .env.*.local
+
+# TypeScript build info
+*.tsbuildinfo
+
+# POS Data Files (Never commit real reports)
+*.csv
+*.xlsx
+*.xls
+*.pdf

@@ -51,11 +51,22 @@ export interface DatasetCapabilities {
   sourceFiles: string[];
 }
 
+export interface UploadedFileSummary {
+  fileName: string;
+  lineCount: number;
+  outlets: string[];
+  dateFrom: string | null;
+  dateTo: string | null;
+  hasHourly: boolean;
+  hasGuests: boolean;
+}
+
 export interface ParsedDataset {
   lines: PosOrderLine[];
   pdfPayments: PdfPaymentSummary[];
   pdfDailySessions: PdfDailySessionRow[];
   capabilities: DatasetCapabilities;
+  fileSummaries?: UploadedFileSummary[];
   warnings: string[];
 }
 

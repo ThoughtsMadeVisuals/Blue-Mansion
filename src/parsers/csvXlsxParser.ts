@@ -24,7 +24,11 @@ interface ColumnMap {
 }
 
 function normalizeHeader(h: string): string {
-  return h.trim().toLowerCase().replace(/[\s_]+/g, ' ');
+  return h
+    .trim()
+    .toLowerCase()
+    .replace(/\s*\/\s*/g, ' / ')
+    .replace(/[\s_]+/g, ' ');
 }
 
 function findColumn(headers: string[], candidates: string[]): string | undefined {
@@ -101,11 +105,19 @@ function detectColumns(headers: string[]): ColumnMap {
       'qty',
     ]),
     subtotal: findColumn(headers, [
+      'order lines / tax excl.',
+      'order lines / tax excl',
+      'lines / tax excl.',
+      'lines / tax excl',
+      'tax excl.',
+      'tax excl',
       'lines / subtotal',
       'lines / subtotal w/o tax',
       'subtotal w/o tax',
       'subtotal',
       'price subtotal',
+      'order lines / tax incl.',
+      'order lines / tax incl',
       'lines / total',
       'total',
       'amount',
@@ -361,6 +373,14 @@ export function normalizeRows(
     });
   });
 
+  const dates = lines
+    .map((l) => l.dateKey)
+    .filter((d): d is string => Boolean(d))
+    .sort();
+  const outlets = Array.from(
+    new Set(lines.map((l) => (l.subOutlet !== 'Unknown' ? l.subOutlet : l.outlet)))
+  ).filter((o) => o !== 'Unassigned');
+
   return {
     lines,
     pdfPayments: [],
@@ -373,6 +393,17 @@ export function normalizeRows(
       hasOrderLevelTransactions: hasOrderRef,
       sourceFiles: [fileName],
     },
+    fileSummaries: [
+      {
+        fileName,
+        lineCount: lines.length,
+        outlets,
+        dateFrom: dates[0] ?? null,
+        dateTo: dates[dates.length - 1] ?? null,
+        hasHourly,
+        hasGuests,
+      },
+    ],
     warnings,
   };
 }

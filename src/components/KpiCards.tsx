@@ -7,60 +7,60 @@ import { formatInt, formatRM } from '../utils/formatters';
 interface KpiCardsProps {
   report: AggregatedReport;
   capabilities: DatasetCapabilities;
+  outletLabel: string;
 }
 
-export const KpiCards: React.FC<KpiCardsProps> = ({ report, capabilities }) => {
-  const { mangga, indigo, total } = report.kpis;
+export const KpiCards: React.FC<KpiCardsProps> = ({
+  report,
+  capabilities,
+  outletLabel,
+}) => {
+  const { total } = report.kpis;
 
   const cards = [
     {
       title: 'Total Sales',
       icon: DollarSign,
-      totalVal: formatRM(total.sales),
-      manggaVal: formatRM(mangga.sales),
-      indigoVal: formatRM(indigo.sales),
+      value: formatRM(total.sales),
+      subtext: `${outletLabel} revenue`,
       available: true,
     },
     {
       title: 'Transactions',
       icon: Receipt,
-      totalVal: formatInt(total.transactions),
-      manggaVal: capabilities.hasOrderLevelTransactions ? formatInt(mangga.transactions) : '—',
-      indigoVal: capabilities.hasOrderLevelTransactions ? formatInt(indigo.transactions) : '—',
-      available: capabilities.hasOrderLevelTransactions || Boolean(capabilities.totalPdfTransactions),
+      value: formatInt(total.transactions),
+      subtext: capabilities.hasOrderLevelTransactions
+        ? 'Distinct POS orders'
+        : 'Combined PDF total',
+      available:
+        capabilities.hasOrderLevelTransactions ||
+        Boolean(capabilities.totalPdfTransactions),
     },
     {
       title: 'Amount of Guests',
       icon: Users,
-      totalVal: capabilities.hasGuests ? formatInt(total.guests) : 'CSV/XLSX Needed',
-      manggaVal: capabilities.hasGuests ? formatInt(mangga.guests) : '—',
-      indigoVal: capabilities.hasGuests ? formatInt(indigo.guests) : '—',
+      value: capabilities.hasGuests ? formatInt(total.guests) : 'CSV/XLSX Needed',
+      subtext:
+        capabilities.hasGuests && total.transactions > 0
+          ? `${(total.guests / total.transactions).toFixed(1)} avg guests / order`
+          : 'Total covers served',
       available: capabilities.hasGuests,
     },
     {
       title: 'Items Sold (Qty)',
       icon: ShoppingBag,
-      totalVal: formatInt(total.qty),
-      manggaVal: formatInt(mangga.qty),
-      indigoVal: formatInt(indigo.qty),
+      value: formatInt(total.qty),
+      subtext: `${report.salesByItem.length} unique menu items`,
       available: true,
     },
     {
-      title: 'Avg Ticket / Spend per Guest',
+      title: 'Avg Ticket / Guest Spend',
       icon: TrendingUp,
-      totalVal: capabilities.hasOrderLevelTransactions ? formatRM(total.avgTicket) : '—',
-      manggaVal:
-        capabilities.hasGuests && mangga.guests > 0
-          ? `${formatRM(mangga.avgSpendPerGuest)}/guest`
-          : capabilities.hasOrderLevelTransactions
-            ? formatRM(mangga.avgTicket)
-            : '—',
-      indigoVal:
-        capabilities.hasGuests && indigo.guests > 0
-          ? `${formatRM(indigo.avgSpendPerGuest)}/guest`
-          : capabilities.hasOrderLevelTransactions
-            ? formatRM(indigo.avgTicket)
-            : '—',
+      value: capabilities.hasOrderLevelTransactions ? formatRM(total.avgTicket) : '—',
+      subtext:
+        capabilities.hasGuests && total.guests > 0
+          ? `${formatRM(total.avgSpendPerGuest)} per guest`
+          : 'Average per transaction',
       available: capabilities.hasOrderLevelTransactions,
     },
   ];
@@ -81,20 +81,13 @@ export const KpiCards: React.FC<KpiCardsProps> = ({ report, capabilities }) => {
               </div>
             </div>
             <div
-              className={`mt-2 text-xl font-bold ${
+              className={`mt-2 text-2xl font-bold tracking-tight ${
                 card.available ? 'text-slate-900' : 'text-amber-600 text-sm'
               }`}
             >
-              {card.totalVal}
+              {card.value}
             </div>
-            <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
-              <span className="font-medium text-emerald-700">
-                Mangga: <span className="font-semibold">{card.manggaVal}</span>
-              </span>
-              <span className="font-medium text-indigo-700">
-                Indigo: <span className="font-semibold">{card.indigoVal}</span>
-              </span>
-            </div>
+            <p className="mt-1.5 text-[11px] text-slate-500">{card.subtext}</p>
           </div>
         );
       })}
