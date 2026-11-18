@@ -57,6 +57,10 @@ export interface ViewContext {
   colorOf: (series: string) => string;
   /** Points of sale present in each year of the loaded data. */
   posByYear: Record<string, string[]>;
+  /** First and last date in the loaded data. */
+  bounds: { min: string; max: string };
   selectedPos: string[];
+  /** Months where a point of sale's guest count looks like a default of 1 per receipt (YYYY-MM). */
+  guestIssues: Record<string, string[]>;
   setPos: (pos: string[]) => void;
 }

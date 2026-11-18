@@ -12,6 +12,7 @@ import {
   type ViewContext,
 } from '../lib/metrics';
 import type { Holiday } from '../types';
+import { GuestWarning } from './GuestWarning';
 import { Badge, Card, ChartTooltip, Empty, Segmented, SmallButton, Table, Td, Th } from './ui';
 
 const KEYS: MetricKey[] = ['tx', 'avgTicket', 'guests', 'spg', 'sales'];
@@ -61,7 +62,6 @@ export const TicketsView: React.FC<{ ctx: ViewContext; holidays: Holiday[]; onPi
     return r;
   });
 
-  const days = report.daily.size || 1;
 
   if (!periods.length) return <Empty>No data for the current filters.</Empty>;
 
@@ -85,9 +85,12 @@ export const TicketsView: React.FC<{ ctx: ViewContext; holidays: Holiday[]; onPi
 
   return (
     <div className="space-y-5">
+      <GuestWarning ctx={ctx} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cardSeries.map((s) => {
           const m = s === '__all' ? report.kpi.total : report.kpi.s[s];
+          // Average over the days this outlet actually traded
+          const days = Math.max(1, s === '__all' ? report.days.total : (report.days.s[s] ?? 0));
           return (
             <div key={s} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
@@ -103,6 +106,8 @@ export const TicketsView: React.FC<{ ctx: ViewContext; holidays: Holiday[]; onPi
                 <span className="text-right font-semibold tabular-nums">{(m.guests / days).toFixed(1)}</span>
                 <span className="text-slate-500">Spend / guest</span>
                 <span className="text-right font-semibold tabular-nums">{m.guests ? rm(spendPerGuest(m)) : '—'}</span>
+                <span className="text-slate-500">Trading days</span>
+                <span className="text-right tabular-nums">{int(days)}</span>
                 <span className="text-slate-500">Total tickets</span>
                 <span className="text-right tabular-nums">{int(m.tx)}</span>
                 <span className="text-slate-500">Total guests</span>

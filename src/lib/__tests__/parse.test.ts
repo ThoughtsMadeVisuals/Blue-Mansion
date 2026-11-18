@@ -144,3 +144,29 @@ describe('normalizeRows', () => {
     expect(r2.kpi.total.sales).toBeCloseTo(38);
   });
 });
+
+describe('report extras', () => {
+  const base = { Status: 'Posted', Guests: 1, 'Order Lines/Quantity': 1 };
+  const rows = [
+    row({ ...base, 'Order Ref': 'A1', Date: '2026-01-05 12:00:00', 'Point of Sale': 'Mangga (Day)', 'Receipt Number': 'r1', 'Order Lines/Product': '(M) Nasi Lemak', 'Order Lines/Tax Excl.': 100, 'Order Lines/Tax Incl.': 106 }),
+    row({ 'Order Lines/Product': '[DISC1] Discount', 'Order Lines/Quantity': 1, 'Order Lines/Tax Excl.': -10, 'Order Lines/Tax Incl.': -10.6 }),
+    row({ ...base, 'Order Ref': 'A2', Date: '2026-01-06 12:00:00', 'Point of Sale': 'Mangga (Day)', 'Receipt Number': 'r2', 'Order Lines/Product': '(M) Nasi Lemak', 'Order Lines/Tax Excl.': 50, 'Order Lines/Tax Incl.': 53 }),
+    row({ ...base, 'Order Ref': 'B1', Date: '2026-01-06 21:00:00', 'Point of Sale': 'The Bar', 'Receipt Number': 'r3', 'Order Lines/Product': '(TBM) Tiger Beer', 'Order Lines/Tax Excl.': 20, 'Order Lines/Tax Incl.': 23 }),
+  ];
+  const ds = mergeIntoDataset(null, normalizeRows(rows, 'x.xlsx'));
+  const r = computeReport(ds, ALL, defaultSettings(), 'outlet');
+
+  it('counts trading days per outlet', () => {
+    expect(r.days.total).toBe(2);
+    expect(r.days.s['Mangga']).toBe(2);
+    expect(r.days.s['The Bar']).toBe(1);
+    expect(r.days.dowS['The Bar'][2]).toBe(1); // Tuesday
+  });
+
+  it('keeps discounts in sales but out of item and category lists', () => {
+    expect(r.kpi.total.sales).toBeCloseTo(160);
+    expect(r.discounts.sales).toBeCloseTo(-10);
+    expect(r.items.some((i) => /discount/i.test(i.product))).toBe(false);
+    expect(r.categories.reduce((s, c) => s + c.sales, 0)).toBeCloseTo(170);
+  });
+});

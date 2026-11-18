@@ -27,8 +27,16 @@ import { Card, ChartTooltip, Delta, Empty, Segmented, SmallButton, Table, Td, Th
 
 const KEYS: MetricKey[] = ['sales', 'tx', 'guests', 'avgTicket', 'spg'];
 
-function sumMetrics(a: Metrics, b: Metrics | undefined): Metrics {
+function sumMetrics(a: Metrics, b: Metrics | undefined, inPlace = false): Metrics {
   if (!b) return a;
+  if (inPlace) {
+    a.sales += b.sales;
+    a.qty += b.qty;
+    a.tx += b.tx;
+    a.guests += b.guests;
+    a.guestSales += b.guestSales;
+    return a;
+  }
   return {
     sales: a.sales + b.sales,
     qty: a.qty + b.qty,
@@ -43,6 +51,10 @@ export const MonthlyView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
   const [metric, setMetric] = useState<MetricKey>('sales');
   const [tableSeries, setTableSeries] = useState<string>('__all');
 
+  const lastDate = ctx.bounds.max;
+  const lastDay = +lastDate.slice(8, 10);
+  const monthLen = new Date(Date.UTC(+lastDate.slice(0, 4), +lastDate.slice(5, 7), 0)).getUTCDate();
+  const partial = lastDay < monthLen ? { monthIdx: +lastDate.slice(5, 7) - 1, year: lastDate.slice(0, 4), lastDay } : null;
   const months = useMemo(() => Array.from(report.monthly.keys()).sort(), [report]);
   const years = useMemo(() => Array.from(new Set(months.map((m) => m.slice(0, 4)))).sort(), [months]);
 
@@ -55,7 +67,9 @@ export const MonthlyView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
   const yoyData = useMemo(
     () =>
       MONTHS.map((label, i) => {
-        const row: Record<string, string | number | null> = { label };
+        const row: Record<string, string | number | null> = {
+          label: partial && partial.monthIdx === i && years.includes(partial.year) ? `${label}*` : label,
+        };
         for (const y of years) {
           const m = pick(`${y}-${String(i + 1).padStart(2, '0')}`, '__all');
           row[y] = m ? metricValue(m, metric) : null;
@@ -91,10 +105,33 @@ export const MonthlyView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
   const additive = isAdditive(metric);
   const lastTwo = years.slice(-2);
 
+  // The latest month may be incomplete (e.g. data stops on 14 Nov). Compare it with the
+  // same days of the same month one year earlier instead of the whole month.
+  const sameDays = (year: string, monthIdx: number, upTo: number, series: string): Metrics | undefined => {
+    const acc = emptyMetrics();
+    let found = false;
+    for (let d = 1; d <= upTo; d++) {
+      const key = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const b = report.daily.get(key) ?? ctx.prev?.daily.get(key);
+      const m = b ? (series === '__all' ? b.total : b.s[series]) : undefined;
+      if (m) {
+        found = true;
+        sumMetrics(acc, m, true);
+      }
+    }
+    return found ? acc : undefined;
+  };
+  /** Older-year value used when comparing against the partial month. */
+  const compareCell = (monthIdx: number, olderYear: string, newerYear: string, series: string, fallback: Metrics | undefined) =>
+    partial && partial.monthIdx === monthIdx && partial.year === newerYear
+      ? sameDays(olderYear, monthIdx, partial.lastDay, series)
+      : fallback;
+  const partialLabel = partial ? `${MONTHS[partial.monthIdx]} ${partial.year}` : '';
+
   // Table: month x year
   const tableRows = MONTHS.map((label, i) => {
     const cells = years.map((y) => pick(`${y}-${String(i + 1).padStart(2, '0')}`, tableSeries));
-    return { label, cells };
+    return { label, cells, idx: i };
   });
   const yearTotals = years.map((_, yi) =>
     tableRows.reduce((acc, r) => sumMetrics(acc, r.cells[yi]), emptyMetrics()),
@@ -103,8 +140,8 @@ export const MonthlyView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
   const lfl = lastTwo.length === 2
     ? tableRows.reduce(
         (acc, r) => {
-          const a = r.cells[years.indexOf(lastTwo[0])];
           const b = r.cells[years.indexOf(lastTwo[1])];
+          const a = compareCell(r.idx, lastTwo[0], lastTwo[1], tableSeries, r.cells[years.indexOf(lastTwo[0])]);
           if (a && b) return { a: sumMetrics(acc.a, a), b: sumMetrics(acc.b, b), n: acc.n + 1 };
           return acc;
         },
@@ -172,8 +209,19 @@ export const MonthlyView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
                     footer={() => {
                       if (lastTwo.length < 2) return null;
                       const pl = p.payload as { dataKey: string; value: number }[] | undefined;
-                      const a = pl?.find((x) => x.dataKey === lastTwo[0])?.value;
+                      let a = pl?.find((x) => x.dataKey === lastTwo[0])?.value;
                       const b = pl?.find((x) => x.dataKey === lastTwo[1])?.value;
+                      const mi = MONTHS.findIndex((m) => String(p.label).startsWith(m));
+                      if (partial && mi === partial.monthIdx && partial.year === lastTwo[1]) {
+                        const sd = sameDays(lastTwo[0], mi, partial.lastDay, '__all');
+                        if (!sd || !b) return null;
+                        a = metricValue(sd, metric);
+                        return (
+                          <span className="text-slate-600">
+                            Incomplete month: 1–{partial.lastDay} {MONTHS[mi]} {lastTwo[1]} vs same days {lastTwo[0]} ({fmt(a)}): <b>{pct(pctChange(b, a))}</b>
+                          </span>
+                        );
+                      }
                       if (!a || !b) return null;
                       return <span className="text-slate-600">{lastTwo[1]} vs {lastTwo[0]}: <b>{pct(pctChange(b, a))}</b></span>;
                     }}
@@ -273,11 +321,15 @@ export const MonthlyView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
           </thead>
           <tbody>
             {tableRows.map((r) => {
-              const a = r.cells[years.indexOf(lastTwo[0])];
               const b = r.cells[years.indexOf(lastTwo[1])];
+              const isPartial = Boolean(partial && partial.monthIdx === r.idx && lastTwo[1] === partial.year);
+              const a = compareCell(r.idx, lastTwo[0], lastTwo[1], tableSeries, r.cells[years.indexOf(lastTwo[0])]);
               return (
                 <tr key={r.label} className="hover:bg-slate-50">
-                  <Td className="font-medium">{r.label}</Td>
+                  <Td className="font-medium">
+                    {r.label}
+                    {isPartial && <span title={`Data up to day ${partial!.lastDay}`} className="ml-1 text-amber-600">*</span>}
+                  </Td>
                   {r.cells.map((c, i) => (
                     <React.Fragment key={i}>
                       <Td right className="border-l border-slate-100 font-semibold">{c ? fmtMetric('sales', c.sales) : '—'}</Td>
@@ -289,6 +341,7 @@ export const MonthlyView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
                   {lastTwo.length === 2 && (
                     <Td right className="border-l border-slate-100">
                       <Delta value={a && b ? pctChange(b.sales, a.sales) : null} />
+                      {isPartial && a && <div className="text-[10px] text-slate-400">vs 1–{partial!.lastDay} {r.label} {lastTwo[0]}: {fmtMetric('sales', a.sales)}</div>}
                     </Td>
                   )}
                 </tr>
@@ -311,8 +364,14 @@ export const MonthlyView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
         {lfl && lfl.n > 0 && lfl.n < 12 && (
           <p className="mt-3 text-xs text-slate-600">
             Like-for-like ({lfl.n} months present in both years): {lastTwo[1]} {fmtMetric('sales', lfl.b.sales)} vs{' '}
-            {lastTwo[0]} {fmtMetric('sales', lfl.a.sales)} → <b>{pct(pctChange(lfl.b.sales, lfl.a.sales))}</b>. Partial
-            months (e.g. the latest month) are compared as they stand.
+            {lastTwo[0]} {fmtMetric('sales', lfl.a.sales)} → <b>{pct(pctChange(lfl.b.sales, lfl.a.sales))}</b>
+            {partial && <> ({partialLabel} compared over the same days, 1–{partial.lastDay})</>}.
+          </p>
+        )}
+        {partial && (
+          <p className="mt-1 text-xs text-amber-700">
+            * {partialLabel} is incomplete: the data stops on {partial.lastDay} {MONTHS[partial.monthIdx]}. Its change is
+            measured against the same days one year earlier.
           </p>
         )}
       </Card>

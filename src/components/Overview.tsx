@@ -5,6 +5,8 @@ import { DOWS_LONG, hourRange, int, longDate, monthLabel, pctChange, rm, shortCa
 import type { ViewContext } from '../lib/metrics';
 import type { Holiday } from '../types';
 import { Card, Delta, Table, Td, Th } from './ui';
+import { GuestWarning } from './GuestWarning';
+import { rmCompact } from '../lib/format';
 
 export const Overview: React.FC<{ ctx: ViewContext; holidays: Holiday[]; onGoto: (tab: string) => void }> = ({
   ctx,
@@ -29,7 +31,15 @@ export const Overview: React.FC<{ ctx: ViewContext; holidays: Holiday[]; onGoto:
   const yoy = (cur: number, pv: number | undefined) => (p && pv !== undefined ? pctChange(cur, pv) : null);
 
   const cards = [
-    { title: 'Total sales', icon: DollarSign, value: rm(k.sales, 0), d: yoy(k.sales, p?.sales), sub: p ? `Last year ${rm(p.sales, 0)}` : '' },
+    {
+      title: 'Total sales',
+      icon: DollarSign,
+      value: rm(k.sales, 0),
+      d: yoy(k.sales, p?.sales),
+      sub: [p ? `Last year ${rm(p.sales, 0)}` : '', report.discounts.sales ? `net of ${rmCompact(-report.discounts.sales)} discounts` : '']
+        .filter(Boolean)
+        .join(' · '),
+    },
     { title: 'Transactions', icon: Receipt, value: int(k.tx), d: yoy(k.tx, p?.tx), sub: 'Receipts (excl. refunds)' },
     { title: 'Guests', icon: Users, value: int(k.guests), d: yoy(k.guests, p?.guests), sub: k.tx ? `${(k.guests / k.tx).toFixed(2)} guests per receipt` : '' },
     { title: 'Avg ticket', icon: TrendingUp, value: rm(avgTicket(k)), d: p ? pctChange(avgTicket(k), avgTicket(p)) : null, sub: 'Sales ÷ transactions' },
@@ -80,6 +90,7 @@ export const Overview: React.FC<{ ctx: ViewContext; holidays: Holiday[]; onGoto:
           </div>
         ))}
       </div>
+      <GuestWarning ctx={ctx} />
       {lyWarning && (
         <div className="-mt-1 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <span>
@@ -147,6 +158,8 @@ export const Overview: React.FC<{ ctx: ViewContext; holidays: Holiday[]; onGoto:
               <Th>Outlet</Th>
               <Th right>Sales</Th>
               <Th right>Share</Th>
+              <Th right>Trading days</Th>
+              <Th right>Sales / day</Th>
               {p && <Th right>Sales LY</Th>}
               {p && <Th right>vs LY</Th>}
               <Th right>Transactions</Th>
@@ -170,6 +183,8 @@ export const Overview: React.FC<{ ctx: ViewContext; holidays: Holiday[]; onGoto:
                   </Td>
                   <Td right className="font-semibold">{rm(m.sales, 0)}</Td>
                   <Td right>{k.sales ? ((m.sales / k.sales) * 100).toFixed(1) : '0'}%</Td>
+                  <Td right>{int(report.days.s[s] ?? 0)}</Td>
+                  <Td right>{report.days.s[s] ? rm(m.sales / report.days.s[s], 0) : '—'}</Td>
                   {p && <Td right>{pm ? rm(pm.sales, 0) : '—'}</Td>}
                   {p && (
                     <Td right>
@@ -188,6 +203,8 @@ export const Overview: React.FC<{ ctx: ViewContext; holidays: Holiday[]; onGoto:
               <Td>All selected</Td>
               <Td right>{rm(k.sales, 0)}</Td>
               <Td right>100%</Td>
+              <Td right>{int(report.days.total)}</Td>
+              <Td right>{report.days.total ? rm(k.sales / report.days.total, 0) : '—'}</Td>
               {p && <Td right>{rm(p.sales, 0)}</Td>}
               {p && (
                 <Td right>

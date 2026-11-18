@@ -114,8 +114,11 @@ export default function App() {
 
   const { prev, prevComplete } = useMemo(() => {
     if (!ds || !bounds) return { prev: null, prevComplete: false };
-    const from = filters.dateFrom || bounds.min;
-    const to = filters.dateTo || bounds.max;
+    // Clamp to the data actually loaded, so "2026" (data to 14 Nov) is compared with 1 Jan – 14 Nov 2025
+    const rawFrom = filters.dateFrom || bounds.min;
+    const rawTo = filters.dateTo || bounds.max;
+    const from = rawFrom < bounds.min ? bounds.min : rawFrom;
+    const to = rawTo > bounds.max ? bounds.max : rawTo;
     const pf = shiftYears(from, -1);
     const pt = shiftYears(to, -1);
     if (pt < bounds.min) return { prev: null, prevComplete: false };
@@ -140,6 +143,28 @@ export default function App() {
     return Array.from(m.values()).sort((a, b) => b.sales - a.sales);
   }, [ds, settings]);
 
+  // Guest counts that look like a default of 1 per receipt (not real covers)
+  const guestIssues = useMemo(() => {
+    const m = new Map<string, { n: number; ones: number }>();
+    for (const o of ds?.orders ?? []) {
+      if (o.isRefund) continue;
+      const k = `${o.pos}|${o.dateKey.slice(0, 7)}`;
+      const e = m.get(k) ?? { n: 0, ones: 0 };
+      e.n++;
+      if (o.guests === 1) e.ones++;
+      m.set(k, e);
+    }
+    const out: Record<string, string[]> = {};
+    for (const [k, e] of m) {
+      if (e.n >= 30 && e.ones / e.n >= 0.97) {
+        const [pos, month] = k.split('|');
+        (out[pos] ??= []).push(month);
+      }
+    }
+    for (const v of Object.values(out)) v.sort();
+    return out;
+  }, [ds]);
+
   const posByYear = useMemo(() => {
     const m: Record<string, Set<string>> = {};
     for (const o of ds?.orders ?? []) (m[o.dateKey.slice(0, 4)] ??= new Set()).add(o.pos);
@@ -155,7 +180,9 @@ export default function App() {
   const periodLabel = bounds
     ? filters.dateFrom && filters.dateFrom === filters.dateTo
       ? longDate(filters.dateFrom)
-      : `${shortDate(filters.dateFrom || bounds.min)} – ${shortDate(filters.dateTo || bounds.max)}`
+      : `${shortDate(filters.dateFrom && filters.dateFrom > bounds.min ? filters.dateFrom : bounds.min)} – ${shortDate(
+          filters.dateTo && filters.dateTo < bounds.max ? filters.dateTo : bounds.max,
+        )}`
     : '';
 
   const ctx: ViewContext | null = report
@@ -166,7 +193,9 @@ export default function App() {
         periodLabel,
         colorOf,
         posByYear,
+        bounds: bounds!,
         selectedPos: filters.pos,
+        guestIssues,
         setPos: (pos: string[]) => {
           setFilters({ ...filters, pos });
           setSavedFilters(null);

@@ -28,7 +28,10 @@ export const HoursView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
     return c;
   }, [report]);
 
-  const divisor = per === 'day' && isAdditive(metric) && days ? days : 1;
+  const perDay = per === 'day' && isAdditive(metric);
+  // Each outlet is averaged over the days it actually traded
+  const divOf = (series: string | null) =>
+    perDay ? Math.max(1, series ? (report.days.s[series] ?? 0) : report.days.total) : 1;
   const active = report.hourly
     .map((b, h) => ({ b, h }))
     .filter(({ b }) => b.total.sales !== 0 || b.total.tx !== 0);
@@ -39,15 +42,16 @@ export const HoursView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
     const rows = [];
     for (let h = first; h <= last; h++) {
       const b = report.hourly[h];
-      const row: Record<string, number | string> = { hour: hourLabel(h), Total: metricValue(b.total, metric) / divisor };
-      for (const s of report.series) row[s] = metricValue(b.s[s], metric) / divisor;
+      const row: Record<string, number | string> = { hour: hourLabel(h), Total: metricValue(b.total, metric) / divOf(null) };
+      for (const s of report.series) row[s] = metricValue(b.s[s], metric) / divOf(s);
       rows.push(row);
     }
     return rows;
-  }, [report, metric, divisor, first, last]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report, metric, perDay, first, last]);
 
   const best = useMemo(() => {
-    const out: { name: string; color: string; hour: number; sales: number; share: number; top3: number[] }[] = [];
+    const out: { name: string; color: string; hour: number; sales: number; share: number; top3: number[]; days: number }[] = [];
     const keys = report.series.length > 1 ? ['__total', ...report.series] : ['__total'];
     for (const s of keys) {
       const vals = report.hourly.map((b) => (s === '__total' ? b.total.sales : (b.s[s]?.sales ?? 0)));
@@ -61,6 +65,7 @@ export const HoursView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
         sales: order[0].v,
         share: (order[0].v / total) * 100,
         top3: order.slice(0, 3).map((x) => x.h),
+        days: Math.max(1, s === '__total' ? report.days.total : (report.days.s[s] ?? 0)),
       });
     }
     return out;
@@ -94,7 +99,7 @@ export const HoursView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
             </div>
             <div className="mt-1.5 text-lg font-bold text-slate-900">{hourRange(b.hour)}</div>
             <div className="text-xs text-slate-500">
-              {rm(b.sales / (days || 1), 0)} per day on average · {b.share.toFixed(1)}% of sales
+              {rm(b.sales / b.days, 0)} per trading day ({b.days} days) · {b.share.toFixed(1)}% of sales
             </div>
             <div className="mt-1 text-[11px] text-slate-400">Top 3: {b.top3.map(hourRange).join(', ')}</div>
           </div>
@@ -102,8 +107,8 @@ export const HoursView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
       </div>
 
       <Card
-        title={`${METRIC_LABEL[metric]} by hour${divisor > 1 ? ' (average per trading day)' : ''}`}
-        subtitle={`Based on the time each receipt was opened · ${days} trading days`}
+        title={`${METRIC_LABEL[metric]} by hour${perDay ? ' (average per trading day)' : ''}`}
+        subtitle={`Based on the time each receipt was opened · ${days} trading days${perDay && report.series.length > 1 ? ' · each outlet averaged over its own trading days' : ''}`}
         actions={
           <>
             <Segmented value={metric} onChange={setMetric} options={METRIC_OPTIONS(KEYS)} />
@@ -128,7 +133,7 @@ export const HoursView: React.FC<{ ctx: ViewContext }> = ({ ctx }) => {
               <YAxis tickFormatter={fmtC} tick={{ fontSize: 11 }} width={70} />
               <Tooltip cursor={{ fill: '#f1f5f9' }} content={(p) => <ChartTooltip {...(p as object)} valueFormatter={fmt} labelFormatter={(l) => hourRange(parseInt(String(l), 10))} />} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              {report.series.length > 1 && isAdditive(metric)
+              {report.series.length > 1 && isAdditive(metric) && !perDay
                 ? report.series.map((s) => <Bar key={s} dataKey={s} name={s} stackId="h" fill={colorOf(s)} />)
                 : report.series.length > 1
                   ? report.series.map((s) => <Bar key={s} dataKey={s} name={s} fill={colorOf(s)} radius={[3, 3, 0, 0]} />)

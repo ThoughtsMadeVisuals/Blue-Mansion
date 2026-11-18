@@ -5,3 +5,56 @@
     font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
 }
+
+/* ---------- Print / Save as PDF ---------- */
+@media print {
+  /* A3 landscape is about as wide as the on-screen layout, so charts print exactly as
+     they appear (they are drawn at screen width). Choose "Fit to page" to print on A4. */
+  @page {
+    size: A3 landscape;
+    margin: 10mm;
+  }
+  html,
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Show full tables instead of the scrollable on-screen boxes */
+  .print-expand,
+  [class*='max-h-'],
+  [class*='overflow-y-auto'],
+  [class*='overflow-auto'],
+  [class*='overflow-x-auto'] {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  table.min-w-max {
+    min-width: 0 !important;
+    width: 100% !important;
+    font-size: 9px;
+  }
+  th,
+  td {
+    padding: 3px 5px !important;
+    position: static !important;
+  }
+  section,
+  .print-avoid-break {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+  /* Tables can be long: let them break across pages, but keep rows whole */
+  section:has(table) {
+    break-inside: auto;
+  }
+  tr {
+    break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+  .recharts-brush {
+    display: none;
+  }
+}

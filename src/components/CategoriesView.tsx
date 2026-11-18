@@ -98,6 +98,12 @@ export const CategoriesView: React.FC<{ ctx: ViewContext; onSearch: (q: string) 
               })}
             </tbody>
           </Table>
+          {report.discounts.sales !== 0 && (
+            <p className="mt-2 text-[11px] text-slate-600">
+              Discounts given ({rm(report.discounts.sales, 0)}) reduce total sales but are not part of the food / beverage split
+              or the category list.
+            </p>
+          )}
           {report.foodBev.Other.sales > total * 0.05 && (
             <p className="mt-2 text-[11px] text-amber-700">
               "Other" covers items that are neither food nor drink (merchandise, tours, venue hire) or items with no

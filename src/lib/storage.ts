@@ -1,5 +1,5 @@
 import type { ParsedDataset, Settings } from '../types';
-import { DEFAULT_HOLIDAYS } from './holidays';
+import { DEFAULT_HOLIDAYS, HOLIDAYS_VERSION } from './holidays';
 
 const DB_NAME = 'bluemansion_pos_analytics_v2';
 const STORE = 'datasets';
@@ -51,7 +51,7 @@ export function loadSettings(): Settings {
     return {
       posOutlet: p.posOutlet ?? d.posOutlet,
       categoryFoodBev: p.categoryFoodBev ?? d.categoryFoodBev,
-      holidays: Array.isArray(p.holidays) ? p.holidays : d.holidays,
+      holidays: mergeHolidays(p.holidays, (p as { holidaysVersion?: number }).holidaysVersion),
       salesBasis: p.salesBasis === 'incl' ? 'incl' : 'excl',
     };
   } catch {
@@ -59,9 +59,18 @@ export function loadSettings(): Settings {
   }
 }
 
+/** Keep holidays the user added, but refresh the built-in list when it has been updated. */
+function mergeHolidays(saved: unknown, version: number | undefined): Settings['holidays'] {
+  if (!Array.isArray(saved)) return DEFAULT_HOLIDAYS;
+  if (version === HOLIDAYS_VERSION) return saved as Settings['holidays'];
+  const defaults = new Set(DEFAULT_HOLIDAYS.map((h) => h.date));
+  const extra = (saved as Settings['holidays']).filter((h) => h?.date && !defaults.has(h.date));
+  return [...DEFAULT_HOLIDAYS, ...extra];
+}
+
 export function saveSettings(s: Settings): void {
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...s, holidaysVersion: HOLIDAYS_VERSION }));
   } catch {
     /* ignore */
   }

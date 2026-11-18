@@ -89,10 +89,11 @@ export const DailyView: React.FC<{
     const order = [1, 2, 3, 4, 5, 6, 0];
     return order.map((w) => {
       const a = acc[w];
-      const v = (m: Metrics | undefined) =>
-        !m || !a.n ? 0 : isAdditive(metric) ? metricValue(m, metric) / a.n : metricValue(m, metric);
-      const row: Record<string, number | string> = { dow: DOWS[w], days: a.n, Total: v(a.total) };
-      for (const s of report.series) row[s] = v(a.s[s]);
+      // Each outlet is averaged over the days it traded on that weekday
+      const v = (m: Metrics | undefined, n: number) =>
+        !m || !n ? 0 : isAdditive(metric) ? metricValue(m, metric) / n : metricValue(m, metric);
+      const row: Record<string, number | string> = { dow: DOWS[w], days: a.n, Total: v(a.total, a.n) };
+      for (const s of report.series) row[s] = v(a.s[s], report.days.dowS[s]?.[w] ?? 0);
       return row;
     });
   }, [report, days, metric]);

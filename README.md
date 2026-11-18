@@ -40,7 +40,11 @@ If a file has no category columns, items get the category of the same item in an
 - **Categories:** food vs beverage by outlet, sales by POS category or product category.
 - **Guests & Tickets:** tickets, average ticket, guests and spend per guest for every outlet, daily, weekly or monthly.
 
-Settings lets you regroup points of sale into outlets, override food/beverage for a category, and edit the holiday list (Malaysia/Penang 2025–2026 is included; check the Islamic holiday dates).
+**Print / PDF** prints the open tab on an A3 landscape page so charts appear exactly as on screen. To print on A4, choose "Fit to page" in the print dialog.
+
+**Data checks shown in the app:** a warning when the years being compared contain different outlets (with a one-click like-for-like button), a note when the latest month is incomplete (compared over the same days last year), and a warning for months where guests look like a default of 1 per receipt rather than real covers. Discount lines reduce sales and are shown as a separate figure, not as menu items. Per-day averages for each outlet use the days that outlet actually traded.
+
+Settings lets you regroup points of sale into outlets, override food/beverage for a category, and edit the holiday list (Penang 2025–2026 public holidays are included, checked against officeholidays.com and malaysiapublicholiday.my in Nov 2026).
 
 ## Development
 

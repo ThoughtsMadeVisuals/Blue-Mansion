@@ -46,7 +46,15 @@ export interface Report {
   categories: CategoryRow[];
   productCategories: CategoryRow[];
   foodBev: Record<FoodBev, { sales: number; qty: number; s: Record<string, number> }>;
+  /** Discount lines (e.g. "[DISC1] Discount"): included in sales, kept out of item/category lists. */
+  discounts: { sales: number; s: Record<string, number> };
+  /** Days with sales: overall, per series, and per weekday (0 = Sunday). */
+  days: { total: number; s: Record<string, number>; dow: number[]; dowS: Record<string, number[]> };
   lineCount: number;
+}
+
+export function isDiscountLine(product: string): boolean {
+  return /\bdiscount\b/i.test(product);
 }
 
 export const emptyMetrics = (): Metrics => ({ sales: 0, qty: 0, tx: 0, guests: 0, guestSales: 0 });
@@ -123,6 +131,7 @@ export function computeReport(
   };
   const seriesTotals = new Map<string, number>();
   let lineCount = 0;
+  const discounts: Report['discounts'] = { sales: 0, s: {} };
 
   for (const line of ds.lines) {
     const oi = line.o;
@@ -164,6 +173,12 @@ export function computeReport(
     add(getBucket(daily, order.dateKey));
     add(hourly[order.hour]);
     dowHour[order.dow][order.hour].sales += sales;
+
+    if (isDiscountLine(line.product)) {
+      discounts.sales += sales;
+      discounts.s[series] = (discounts.s[series] ?? 0) + sales;
+      continue;
+    }
 
     const itemKey = line.product;
     let it = items.get(itemKey);
@@ -229,6 +244,18 @@ export function computeReport(
     r.foodBev = (['Food', 'Beverage', 'Other'] as FoodBev[]).reduce((a, b) => (f[b] > f[a] ? b : a), 'Food');
   }
 
+  const days: Report['days'] = { total: 0, s: {}, dow: Array(7).fill(0), dowS: {} };
+  for (const [d, b] of daily) {
+    const w = dowOf(d);
+    days.total++;
+    days.dow[w]++;
+    for (const [k, m] of Object.entries(b.s)) {
+      if (!m.tx && !m.sales) continue;
+      days.s[k] = (days.s[k] ?? 0) + 1;
+      (days.dowS[k] ??= Array(7).fill(0))[w]++;
+    }
+  }
+
   const series = Array.from(seriesTotals.entries())
     .sort((a, b) => b[1] - a[1])
     .map(([k]) => k);
@@ -244,6 +271,8 @@ export function computeReport(
     categories: Array.from(cats.values()).sort((a, b) => b.sales - a.sales),
     productCategories: Array.from(pcats.values()).sort((a, b) => b.sales - a.sales),
     foodBev: fb,
+    discounts,
+    days,
     lineCount,
   };
 }
