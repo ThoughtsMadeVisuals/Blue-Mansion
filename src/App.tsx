@@ -1,326 +1,326 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BarChart3, CheckCircle2 } from 'lucide-react';
-import type { FilterState, MappingRules, ParsedDataset } from './types/pos';
-import { loadMappingRules, saveMappingRules } from './utils/defaultMappings';
-import {
-  clearDatasetFromStorage,
-  loadDatasetFromStorage,
-  saveDatasetToStorage,
-} from './utils/datasetStorage';
-import { parseCsvOrXlsxFile } from './parsers/csvXlsxParser';
-import { parseSalesDetailsPdfFile } from './parsers/pdfSalesDetailsParser';
-import { aggregateDataset, reapplyMappings } from './utils/aggregator';
-import { buildSampleDataset } from './utils/sampleData';
-import { FileUploadPanel } from './components/FileUploadPanel';
-import { FileStatusPanel } from './components/FileStatusPanel';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, BarChart3, Printer, Settings as SettingsIcon, Trash2, Undo2 } from 'lucide-react';
+import type { Filters, ParsedDataset, SeriesBy, Settings } from './types';
+import { mergeIntoDataset, parseFile } from './lib/parse';
+import { computeReport, datasetBounds, itemTrend, outletOf, shiftYears } from './lib/aggregate';
+import { colorFor, longDate, shortDate } from './lib/format';
+import { clearDataset, loadDataset, loadSettings, saveDataset, saveSettings } from './lib/storage';
+import type { ViewContext } from './lib/metrics';
+import { UploadPanel } from './components/UploadPanel';
+import { FileStatus } from './components/FileStatus';
 import { FilterBar } from './components/FilterBar';
-import { KpiCards } from './components/KpiCards';
-import { MostSoldItemsPanel } from './components/MostSoldItemsPanel';
-import { SalesByCategoryChart } from './components/SalesByCategoryChart';
-import { SalesByHoursChart } from './components/SalesByHoursChart';
-import { DailySalesChart } from './components/DailySalesChart';
-import { GuestsAndTransactionsPanel } from './components/GuestsAndTransactionsPanel';
-import { SalesByItemChart } from './components/SalesByItemChart';
-import { SalesByItemTable } from './components/SalesByItemTable';
-import { MappingModal } from './components/MappingModal';
+import { Overview } from './components/Overview';
+import { MonthlyView } from './components/MonthlyView';
+import { DailyView } from './components/DailyView';
+import { HoursView } from './components/HoursView';
+import { ItemsView } from './components/ItemsView';
+import { CategoriesView } from './components/CategoriesView';
+import { TicketsView } from './components/TicketsView';
+import { SettingsModal } from './components/SettingsModal';
+import { Segmented } from './components/ui';
 
-const INITIAL_FILTERS: FilterState = {
-  outletFilter: 'Mangga',
-  dateFrom: '',
-  dateTo: '',
-  foodBevFilter: 'All',
-  searchQuery: '',
-};
+const EMPTY_FILTERS: Filters = { pos: [], dateFrom: '', dateTo: '', foodBev: 'All', search: '' };
 
-function getOutletLabel(filter: FilterState['outletFilter']): string {
-  if (filter === 'compare') return 'All Outlets';
-  return filter;
+const TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'monthly', label: 'Monthly & Year vs Year' },
+  { id: 'daily', label: 'Daily & Festive Days' },
+  { id: 'hours', label: 'Best Hours' },
+  { id: 'items', label: 'Items' },
+  { id: 'categories', label: 'Categories' },
+  { id: 'tickets', label: 'Guests & Tickets' },
+] as const;
+type TabId = (typeof TABS)[number]['id'];
+
+function readTab(): TabId {
+  try {
+    const t = localStorage.getItem('bm_tab');
+    if (t && TABS.some((x) => x.id === t)) return t as TabId;
+  } catch {
+    /* ignore */
+  }
+  return 'overview';
 }
 
-function getAccentColor(filter: FilterState['outletFilter']): string {
-  if (filter === 'Indigo Bar') return '#4f46e5';
-  if (filter === 'compare') return '#334155';
-  return '#10b981';
-}
+export default function App() {
+  const [ds, setDs] = useState<ParsedDataset | null>(null);
+  const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [savedFilters, setSavedFilters] = useState<Filters | null>(null);
+  const [seriesBy, setSeriesBy] = useState<SeriesBy>('outlet');
+  const [tab, setTabState] = useState<TabId>(readTab);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [restoring, setRestoring] = useState(true);
 
-function mergeDatasets(existing: ParsedDataset | null, incoming: ParsedDataset): ParsedDataset {
-  if (!existing) return incoming;
-  return {
-    lines: [...existing.lines, ...incoming.lines],
-    pdfPayments: [...existing.pdfPayments, ...incoming.pdfPayments],
-    pdfDailySessions: [...existing.pdfDailySessions, ...incoming.pdfDailySessions],
-    capabilities: {
-      hasHourly: existing.capabilities.hasHourly || incoming.capabilities.hasHourly,
-      hasDailyItems: existing.capabilities.hasDailyItems || incoming.capabilities.hasDailyItems,
-      hasDailyPayments:
-        existing.capabilities.hasDailyPayments || incoming.capabilities.hasDailyPayments,
-      hasGuests: existing.capabilities.hasGuests || incoming.capabilities.hasGuests,
-      hasOrderLevelTransactions:
-        existing.capabilities.hasOrderLevelTransactions ||
-        incoming.capabilities.hasOrderLevelTransactions,
-      totalPdfTransactions:
-        (existing.capabilities.totalPdfTransactions ?? 0) +
-          (incoming.capabilities.totalPdfTransactions ?? 0) || undefined,
-      dateRangeLabel: existing.capabilities.dateRangeLabel ?? incoming.capabilities.dateRangeLabel,
-      sourceFiles: [...existing.capabilities.sourceFiles, ...incoming.capabilities.sourceFiles],
-    },
-    fileSummaries: [
-      ...(existing.fileSummaries ?? []),
-      ...(incoming.fileSummaries ?? []),
-    ],
-    warnings: Array.from(new Set([...existing.warnings, ...incoming.warnings])),
+  const setTab = (t: TabId) => {
+    setTabState(t);
+    try {
+      localStorage.setItem('bm_tab', t);
+    } catch {
+      /* ignore */
+    }
+    window.scrollTo({ top: 0 });
   };
-}
-
-export function App() {
-  const [rules, setRules] = useState<MappingRules>(() => loadMappingRules());
-  const [dataset, setDataset] = useState<ParsedDataset | null>(null);
-  const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isMappingOpen, setIsMappingOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
-    loadDatasetFromStorage().then((saved) => {
-      if (active && saved) {
-        setDataset(reapplyMappings(saved, rules));
-      }
+    loadDataset().then((saved) => {
+      if (saved && Array.isArray(saved.orders)) setDs(saved);
+      setRestoring(false);
     });
-    return () => {
-      active = false;
-    };
-    // Only restore saved dataset once on initial mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleFilesSelected = async (fileList: FileList) => {
-    setIsLoading(true);
-    setErrorMsg(null);
+  const handleFiles = async (files: File[]) => {
+    setError(null);
+    let current = ds;
     try {
-      let merged: ParsedDataset | null = dataset;
-      for (const file of Array.from(fileList)) {
-        const ext = file.name.split('.').pop()?.toLowerCase();
-        if (ext === 'pdf') {
-          const parsed = await parseSalesDetailsPdfFile(file, rules);
-          merged = mergeDatasets(merged, parsed);
-        } else if (ext === 'csv' || ext === 'xlsx' || ext === 'xls') {
-          const parsed = await parseCsvOrXlsxFile(file, rules);
-          merged = mergeDatasets(merged, parsed);
-        } else {
-          setErrorMsg(`Unsupported file format: ${file.name}. Please upload .csv, .xlsx, or .pdf.`);
-        }
+      for (const f of files) {
+        setBusy(`Reading ${f.name}…`);
+        await new Promise((r) => setTimeout(r, 30));
+        const parsed = await parseFile(f);
+        current = mergeIntoDataset(current, parsed);
       }
-      if (merged) {
-        setDataset(merged);
-        setFilters(INITIAL_FILTERS);
-        void saveDatasetToStorage(merged);
+      if (current) {
+        setDs(current);
+        setFilters(EMPTY_FILTERS);
+        setSavedFilters(null);
+        setBusy('Saving…');
+        await saveDataset(current);
       }
-    } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : 'Failed to parse the uploaded file.'
-      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not read the file.');
     } finally {
-      setIsLoading(false);
+      setBusy(null);
     }
   };
 
-  const handleLoadSample = () => {
-    setErrorMsg(null);
-    const sample = buildSampleDataset(rules);
-    setDataset(sample);
-    setFilters(INITIAL_FILTERS);
-    void saveDatasetToStorage(sample);
-  };
+  const bounds = useMemo(() => (ds ? datasetBounds(ds) : null), [ds]);
+  const posList = useMemo(() => (ds ? Array.from(new Set(ds.orders.map((o) => o.pos))).sort() : []), [ds]);
+  const outletFn = useCallback((p: string) => outletOf(p, settings), [settings]);
 
-  const handleSaveRules = (nextRules: MappingRules) => {
-    setRules(nextRules);
-    saveMappingRules(nextRules);
-    if (dataset) {
-      const updated = reapplyMappings(dataset, nextRules);
-      setDataset(updated);
-      void saveDatasetToStorage(updated);
+  // Stable colours: by outlet name or POS name, ordered by first appearance
+  const colorOf = useMemo(() => {
+    const names = seriesBy === 'outlet' ? Array.from(new Set(posList.map(outletFn))) : posList;
+    const idx = new Map(names.map((n, i) => [n, i]));
+    return (s: string) => colorFor(s, idx.get(s) ?? 0);
+  }, [posList, outletFn, seriesBy]);
+
+  const report = useMemo(
+    () => (ds ? computeReport(ds, filters, settings, seriesBy) : null),
+    [ds, filters, settings, seriesBy],
+  );
+
+  const { prev, prevComplete } = useMemo(() => {
+    if (!ds || !bounds) return { prev: null, prevComplete: false };
+    const from = filters.dateFrom || bounds.min;
+    const to = filters.dateTo || bounds.max;
+    const pf = shiftYears(from, -1);
+    const pt = shiftYears(to, -1);
+    if (pt < bounds.min) return { prev: null, prevComplete: false };
+    const r = computeReport(ds, { ...filters, dateFrom: pf, dateTo: pt }, settings, seriesBy);
+    return { prev: r.lineCount ? r : null, prevComplete: pf >= bounds.min && r.lineCount > 0 };
+  }, [ds, bounds, filters, settings, seriesBy]);
+
+  const trend = useMemo(
+    () => (ds && selectedItem ? itemTrend(ds, filters, settings, seriesBy, selectedItem) : null),
+    [ds, filters, settings, seriesBy, selectedItem],
+  );
+
+  const categoriesForSettings = useMemo(() => {
+    if (!ds) return [];
+    const m = new Map<string, { category: string; auto: ParsedDataset['lines'][number]['foodBev']; sales: number }>();
+    for (const l of ds.lines) {
+      const c = l.category || `No category · ${outletOf(ds.orders[l.o].pos, settings)}`;
+      const e = m.get(c) ?? { category: c, auto: l.foodBev, sales: 0 };
+      e.sales += l.salesExcl;
+      m.set(c, e);
     }
+    return Array.from(m.values()).sort((a, b) => b.sales - a.sales);
+  }, [ds, settings]);
+
+  const posByYear = useMemo(() => {
+    const m: Record<string, Set<string>> = {};
+    for (const o of ds?.orders ?? []) (m[o.dateKey.slice(0, 4)] ??= new Set()).add(o.pos);
+    return Object.fromEntries(Object.entries(m).map(([y, set]) => [y, Array.from(set).sort()]));
+  }, [ds]);
+
+  const pickDate = (d: string) => {
+    if (!savedFilters) setSavedFilters(filters);
+    setFilters({ ...filters, dateFrom: d, dateTo: d });
+    setTab('overview');
   };
 
-  const report = useMemo(() => {
-    if (!dataset) return null;
-    return aggregateDataset(dataset, filters);
-  }, [dataset, filters]);
+  const periodLabel = bounds
+    ? filters.dateFrom && filters.dateFrom === filters.dateTo
+      ? longDate(filters.dateFrom)
+      : `${shortDate(filters.dateFrom || bounds.min)} – ${shortDate(filters.dateTo || bounds.max)}`
+    : '';
+
+  const ctx: ViewContext | null = report
+    ? {
+        report,
+        prev,
+        prevComplete,
+        periodLabel,
+        colorOf,
+        posByYear,
+        selectedPos: filters.pos,
+        setPos: (pos: string[]) => {
+          setFilters({ ...filters, pos });
+          setSavedFilters(null);
+        },
+      }
+    : null;
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-16">
-      {/* Top Header */}
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
+    <div className="min-h-screen bg-slate-50 pb-16 text-slate-900">
+      <header className="border-b border-slate-200 bg-white print:border-0">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white">
               <BarChart3 className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-slate-900">
-                POS Sales Analytics
-              </h1>
-              <p className="text-xs text-slate-500">
-                Odoo POS Management Report (Food &amp; Beverage · Hourly · Daily · Guests · Transactions)
-              </p>
+              <h1 className="text-base font-bold">The Blue Mansion · POS Sales Analytics</h1>
+              <p className="text-xs text-slate-500">Odoo POS exports · all outlets · year against year</p>
             </div>
           </div>
-
-          {dataset && (
-            <div className="flex flex-wrap items-center gap-2">
-              {dataset.capabilities.sourceFiles.map((f, idx) => (
-                <span
-                  key={`${f}-${idx}`}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800"
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  {f}
-                </span>
-              ))}
+          {ds && (
+            <div className="flex flex-wrap items-center gap-2 print:hidden">
+              <span className="text-[11px] text-slate-500">Sales</span>
+              <Segmented
+                size="xs"
+                value={settings.salesBasis}
+                onChange={(v) => {
+                  const next = { ...settings, salesBasis: v };
+                  setSettings(next);
+                  saveSettings(next);
+                }}
+                options={[
+                  { value: 'excl', label: 'Excl. tax' },
+                  { value: 'incl', label: 'Incl. tax' },
+                ]}
+              />
+              <button type="button" onClick={() => setSettingsOpen(true)} className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                <SettingsIcon className="h-3.5 w-3.5" /> Settings
+              </button>
+              <button type="button" onClick={() => window.print()} className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-slate-800">
+                <Printer className="h-3.5 w-3.5" /> Print / PDF
+              </button>
+              <button
+                type="button"
+                title="Remove all loaded data"
+                aria-label="Remove all loaded data"
+                onClick={() => {
+                  if (!confirm('Remove all loaded data from this browser?')) return;
+                  setDs(null);
+                  setFilters(EMPTY_FILTERS);
+                  setSelectedItem(null);
+                  void clearDataset();
+                }}
+                className="cursor-pointer rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-6 px-4 pt-6 sm:px-6">
-        <div className="print:hidden space-y-4">
-          <FileUploadPanel
-            onFilesSelected={handleFilesSelected}
-            onLoadSample={handleLoadSample}
-            isLoading={isLoading}
-            compact={Boolean(dataset)}
-          />
-          {dataset && <FileStatusPanel dataset={dataset} />}
-        </div>
-
-        {errorMsg && (
-          <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
-            <span>{errorMsg}</span>
+      <main className="mx-auto max-w-[1400px] space-y-4 px-4 pt-5 sm:px-6">
+        {!restoring && <UploadPanel onFiles={handleFiles} busy={busy} compact={Boolean(ds)} />}
+        {ds && <FileStatus ds={ds} />}
+        {error && (
+          <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {error}
           </div>
         )}
 
-        {dataset && dataset.warnings.length > 0 && (
-          <div className="space-y-1.5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">
-            {dataset.warnings.map((w, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                <span>{w}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {dataset && report && (
+        {ds && bounds && report && ctx && (
           <>
             <FilterBar
               filters={filters}
-              onChange={setFilters}
-              dateBounds={report.dateBounds}
-              availableDates={report.availableDates}
-              allProducts={report.allProducts}
-              allCategories={report.allCategories}
-              unassignedCount={report.unassignedItemsCount}
-              onOpenMapping={() => setIsMappingOpen(true)}
-              onClearData={() => {
-                setDataset(null);
-                setFilters(INITIAL_FILTERS);
-                setSelectedProduct(null);
-                void clearDatasetFromStorage();
+              onChange={(f) => {
+                setFilters(f);
+                setSavedFilters(null);
               }}
+              posList={posList}
+              outletOf={outletFn}
+              bounds={bounds}
+              seriesBy={seriesBy}
+              onSeriesBy={setSeriesBy}
             />
 
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 pb-3">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">
-                  {getOutletLabel(filters.outletFilter)} — Management Sales Report
-                </h2>
-                <p className="text-xs text-slate-500">
-                  {report.dateBounds
-                    ? `Period: ${filters.dateFrom || report.dateBounds.min} to ${filters.dateTo || report.dateBounds.max}`
-                    : dataset.capabilities.dateRangeLabel || 'Uploaded POS Report'}
-                  {filters.foodBevFilter !== 'All' ? ` · ${filters.foodBevFilter} only` : ''}
-                </p>
+            <nav className="flex flex-wrap gap-1 border-b border-slate-200 print:hidden" aria-label="Report sections">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={`-mb-px cursor-pointer border-b-2 px-3 py-2 text-xs font-medium sm:text-sm ${
+                    tab === t.id ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </nav>
+
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-lg font-bold">
+                {TABS.find((t) => t.id === tab)?.label}
+                <span className="ml-2 text-sm font-normal text-slate-500">{periodLabel}</span>
+              </h2>
+              {savedFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilters(savedFilters);
+                    setSavedFilters(null);
+                  }}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+                >
+                  <Undo2 className="h-3.5 w-3.5" /> Back to previous dates
+                </button>
+              )}
+            </div>
+
+            {report.lineCount === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
+                No sales match the current filters.
               </div>
-            </div>
+            ) : (
+              <>
+                {tab === 'overview' && <Overview ctx={ctx} holidays={settings.holidays} onGoto={(t) => setTab(t as TabId)} />}
+                {tab === 'monthly' && <MonthlyView ctx={ctx} />}
+                {tab === 'daily' && <DailyView ctx={ctx} holidays={settings.holidays} onPickDate={pickDate} />}
+                {tab === 'hours' && <HoursView ctx={ctx} />}
+                {tab === 'items' && <ItemsView ctx={ctx} selected={selectedItem} onSelect={setSelectedItem} trend={trend} />}
+                {tab === 'categories' && (
+                  <CategoriesView
+                    ctx={ctx}
+                    onSearch={(q) => {
+                      setFilters({ ...filters, search: q });
+                      setTab('items');
+                    }}
+                  />
+                )}
+                {tab === 'tickets' && <TicketsView ctx={ctx} holidays={settings.holidays} onPickDate={pickDate} />}
+              </>
+            )}
 
-            <KpiCards
-              report={report}
-              capabilities={dataset.capabilities}
-              outletLabel={getOutletLabel(filters.outletFilter)}
-            />
-
-            <MostSoldItemsPanel
-              topFood={report.topFood}
-              topBeverage={report.topBeverage}
-              outletLabel={getOutletLabel(filters.outletFilter)}
-              accentColor={getAccentColor(filters.outletFilter)}
-            />
-
-            <SalesByCategoryChart
-              categories={report.salesByCategory}
-              foodVsBev={report.foodVsBev}
-              outletLabel={getOutletLabel(filters.outletFilter)}
-              accentColor={getAccentColor(filters.outletFilter)}
-            />
-
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <SalesByHoursChart
-                salesByHour={report.salesByHour}
-                hasHourly={dataset.capabilities.hasHourly}
-                outletLabel={getOutletLabel(filters.outletFilter)}
-                accentColor={getAccentColor(filters.outletFilter)}
-              />
-              <DailySalesChart
-                dailySales={report.dailySales}
-                dailyPaymentsFallback={report.dailyPaymentsFallback}
-                hasDailyItems={dataset.capabilities.hasDailyItems}
-                outletLabel={getOutletLabel(filters.outletFilter)}
-                accentColor={getAccentColor(filters.outletFilter)}
-                onSelectDate={(dateKey) =>
-                  setFilters((prev) => ({
-                    ...prev,
-                    dateFrom: dateKey,
-                    dateTo: dateKey,
-                  }))
-                }
-              />
-            </div>
-
-            <GuestsAndTransactionsPanel
-              dailySales={report.dailySales}
-              capabilities={dataset.capabilities}
-              outletLabel={getOutletLabel(filters.outletFilter)}
-              accentColor={getAccentColor(filters.outletFilter)}
-            />
-
-            <SalesByItemChart
-              items={report.salesByItem}
-              dataset={dataset}
-              filters={filters}
-              allCategories={report.allCategories}
-              outletLabel={getOutletLabel(filters.outletFilter)}
-              accentColor={getAccentColor(filters.outletFilter)}
-              selectedProduct={selectedProduct}
-              onSelectProduct={setSelectedProduct}
-            />
-
-            <SalesByItemTable
-              items={report.salesByItem}
-              totalSales={report.kpis.total.sales}
-              outletLabel={getOutletLabel(filters.outletFilter)}
-              selectedProduct={selectedProduct}
-              onSelectProduct={setSelectedProduct}
-            />
-
-            <MappingModal
-              isOpen={isMappingOpen}
-              onClose={() => setIsMappingOpen(false)}
-              categories={report.allCategories}
-              rules={rules}
-              onSave={handleSaveRules}
+            <SettingsModal
+              open={settingsOpen}
+              onClose={() => setSettingsOpen(false)}
+              settings={settings}
+              onSave={(s) => {
+                setSettings(s);
+                saveSettings(s);
+              }}
+              posList={posList}
+              categories={categoriesForSettings}
             />
           </>
         )}
@@ -328,5 +328,3 @@ export function App() {
     </div>
   );
 }
-
-export default App;

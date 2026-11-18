@@ -1,0 +1,63 @@
+import type { Holiday } from '../types';
+
+/**
+ * Malaysia / Penang public holidays and festive dates for 2025–2026.
+ * Islamic holiday dates depend on moon sighting, so please check them and
+ * edit the list in Settings → Holidays if anything differs.
+ */
+export const DEFAULT_HOLIDAYS: Holiday[] = [
+  // 2025
+  { date: '2025-01-01', name: "New Year's Day", kind: 'holiday' },
+  { date: '2025-01-28', name: 'Chinese New Year Eve', kind: 'festive' },
+  { date: '2025-01-29', name: 'Chinese New Year', kind: 'holiday' },
+  { date: '2025-01-30', name: 'Chinese New Year (Day 2)', kind: 'holiday' },
+  { date: '2025-02-11', name: 'Thaipusam', kind: 'holiday' },
+  { date: '2025-02-12', name: 'Chap Goh Mei', kind: 'festive' },
+  { date: '2025-02-14', name: "Valentine's Day", kind: 'festive' },
+  { date: '2025-03-31', name: 'Hari Raya Aidilfitri', kind: 'holiday' },
+  { date: '2025-04-01', name: 'Hari Raya Aidilfitri (Day 2)', kind: 'holiday' },
+  { date: '2025-05-01', name: 'Labour Day', kind: 'holiday' },
+  { date: '2025-05-11', name: "Mother's Day", kind: 'festive' },
+  { date: '2025-05-12', name: 'Wesak Day', kind: 'holiday' },
+  { date: '2025-06-02', name: "Agong's Birthday", kind: 'holiday' },
+  { date: '2025-06-07', name: 'Hari Raya Haji', kind: 'holiday' },
+  { date: '2025-06-15', name: "Father's Day", kind: 'festive' },
+  { date: '2025-06-27', name: 'Awal Muharram', kind: 'holiday' },
+  { date: '2025-07-07', name: 'George Town Heritage Day', kind: 'holiday' },
+  { date: '2025-07-12', name: "Penang Governor's Birthday", kind: 'holiday' },
+  { date: '2025-08-31', name: 'National Day', kind: 'holiday' },
+  { date: '2025-09-01', name: 'National Day (replacement)', kind: 'holiday' },
+  { date: '2025-09-05', name: 'Maulidur Rasul', kind: 'holiday' },
+  { date: '2025-09-16', name: 'Malaysia Day', kind: 'holiday' },
+  { date: '2025-10-20', name: 'Deepavali', kind: 'holiday' },
+  { date: '2025-12-24', name: 'Christmas Eve', kind: 'festive' },
+  { date: '2025-12-25', name: 'Christmas Day', kind: 'holiday' },
+  { date: '2025-12-31', name: "New Year's Eve", kind: 'festive' },
+  // 2026
+  { date: '2026-01-01', name: "New Year's Day", kind: 'holiday' },
+  { date: '2026-02-01', name: 'Thaipusam', kind: 'holiday' },
+  { date: '2026-02-14', name: "Valentine's Day", kind: 'festive' },
+  { date: '2026-02-16', name: 'Chinese New Year Eve', kind: 'festive' },
+  { date: '2026-02-17', name: 'Chinese New Year', kind: 'holiday' },
+  { date: '2026-02-18', name: 'Chinese New Year (Day 2)', kind: 'holiday' },
+  { date: '2026-03-03', name: 'Chap Goh Mei', kind: 'festive' },
+  { date: '2026-03-21', name: 'Hari Raya Aidilfitri', kind: 'holiday' },
+  { date: '2026-03-22', name: 'Hari Raya Aidilfitri (Day 2)', kind: 'holiday' },
+  { date: '2026-05-01', name: 'Labour Day', kind: 'holiday' },
+  { date: '2026-05-10', name: "Mother's Day", kind: 'festive' },
+  { date: '2026-05-27', name: 'Hari Raya Haji', kind: 'holiday' },
+  { date: '2026-05-31', name: 'Wesak Day', kind: 'holiday' },
+  { date: '2026-06-01', name: "Agong's Birthday", kind: 'holiday' },
+  { date: '2026-06-17', name: 'Awal Muharram', kind: 'holiday' },
+  { date: '2026-06-21', name: "Father's Day", kind: 'festive' },
+  { date: '2026-07-07', name: 'George Town Heritage Day', kind: 'holiday' },
+  { date: '2026-07-11', name: "Penang Governor's Birthday", kind: 'holiday' },
+  { date: '2026-08-25', name: 'Maulidur Rasul', kind: 'holiday' },
+  { date: '2026-08-31', name: 'National Day', kind: 'holiday' },
+  { date: '2026-09-16', name: 'Malaysia Day', kind: 'holiday' },
+  { date: '2026-11-08', name: 'Deepavali', kind: 'holiday' },
+  { date: '2026-11-09', name: 'Deepavali (replacement)', kind: 'holiday' },
+  { date: '2026-12-24', name: 'Christmas Eve', kind: 'festive' },
+  { date: '2026-12-25', name: 'Christmas Day', kind: 'holiday' },
+  { date: '2026-12-31', name: "New Year's Eve", kind: 'festive' },
+];

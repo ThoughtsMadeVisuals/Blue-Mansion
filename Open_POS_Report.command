@@ -9,14 +9,15 @@ else
   exit 1
 fi
 
-if [ ! -d "node_modules" ]; then
-  echo "Installing dependencies for the first time..."
+if [ ! -d "node_modules" ] || [ "package-lock.json" -nt "node_modules/.package-lock.json" ]; then
+  echo "Installing dependencies..."
   npm install
 fi
 
-if [ ! -d "dist" ]; then
-  echo "Building app for the first time..."
-  npm run build
+# Rebuild when the app has been updated since the last build
+if [ ! -f "dist/index.html" ] || [ -n "$(find src index.html package.json -newer dist/index.html 2>/dev/null | head -1)" ]; then
+  echo "Building the latest version of the app..."
+  npm run build || exit 1
 fi
 
 echo "Starting The Blue Mansion POS Analytics..."
