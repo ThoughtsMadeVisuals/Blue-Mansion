@@ -1,57 +1,33 @@
 import React, { useState } from 'react';
 import {
+  AlertCircle,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   CircleDashed,
   FileSpreadsheet,
-  AlertCircle,
+  Trash2,
 } from 'lucide-react';
-import type { Outlet, ParsedDataset, UploadedFileSummary } from '../types/pos';
+import type { Outlet, ParsedDataset } from '../types/pos';
 import { OUTLET_INFO, REPORTED_OUTLETS } from '../utils/defaultMappings';
 import { formatInt } from '../utils/formatters';
 
 interface FileStatusPanelProps {
   dataset: ParsedDataset;
+  onRemoveFile: (fileId: string) => void;
 }
 
-function deriveSummaries(dataset: ParsedDataset): UploadedFileSummary[] {
-  if (dataset.fileSummaries && dataset.fileSummaries.length > 0) {
-    return dataset.fileSummaries;
-  }
-  return dataset.capabilities.sourceFiles.map((fileName) => {
-    const fileLines = dataset.lines.filter((l) => l.id.startsWith(`${fileName}-`));
-    const dates = fileLines
-      .map((l) => l.dateKey)
-      .filter((d): d is string => Boolean(d))
-      .sort();
-    const outlets = Array.from(
-      new Set<string>(fileLines.map((l) => l.outlet))
-    ).filter((o) => o !== 'Unassigned');
-
-    return {
-      fileName,
-      lineCount: fileLines.length,
-      outlets,
-      dateFrom: dates[0] ?? null,
-      dateTo: dates[dates.length - 1] ?? null,
-      hasHourly: dataset.capabilities.hasHourly,
-      hasGuests: dataset.capabilities.hasGuests,
-    };
-  });
-}
-
-export const FileStatusPanel: React.FC<FileStatusPanelProps> = ({ dataset }) => {
+export const FileStatusPanel: React.FC<FileStatusPanelProps> = ({ dataset, onRemoveFile }) => {
   const [expanded, setExpanded] = useState(false);
-  const summaries = deriveSummaries(dataset);
+  const summaries = dataset.fileSummaries ?? [];
 
   const outletCounts = new Map<Outlet, number>();
   for (const l of dataset.lines) {
     outletCounts.set(l.outlet, (outletCounts.get(l.outlet) ?? 0) + 1);
   }
 
-  // Every entity is listed separately; the generic "Mangga" and "Unassigned"
-  // buckets only appear when lines actually landed in them.
+  // Every reported entity is listed separately; the generic "Mangga" and
+  // "Unassigned" buckets only appear when lines actually landed in them.
   const establishmentChecklist = REPORTED_OUTLETS.filter(
     (o) => (o !== 'Mangga' && o !== 'Unassigned') || (outletCounts.get(o) ?? 0) > 0
   ).map((o) => ({
@@ -80,87 +56,61 @@ export const FileStatusPanel: React.FC<FileStatusPanelProps> = ({ dataset }) => 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm print:hidden">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="font-semibold text-slate-700">
-            Files Loaded ({summaries.length}):
-          </span>
-          {establishmentChecklist.map((item) => (
-            <span
-              key={item.label}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-medium ${
-                item.done
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                  : 'border-amber-200 bg-amber-50 text-amber-800'
-              }`}
-            >
-              {item.done ? (
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-              ) : (
-                <CircleDashed className="h-3.5 w-3.5 text-amber-500" />
-              )}
-              {item.label}
-            </span>
-          ))}
-        </div>
-
+        <h3 className="text-xs font-semibold text-slate-700">
+          Files Loaded ({summaries.length})
+        </h3>
         <button
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
+          aria-expanded={expanded}
           className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer"
         >
-          {expanded ? (
-            <>
-              Hide file details
-              <ChevronUp className="h-3.5 w-3.5" />
-            </>
-          ) : (
-            <>
-              Show file details
-              <ChevronDown className="h-3.5 w-3.5" />
-            </>
-          )}
+          {expanded ? 'Hide outlet & data coverage' : 'Show outlet & data coverage'}
+          {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         </button>
       </div>
 
-      {expanded && (
-        <div className="mt-4 grid grid-cols-1 gap-4 border-t border-slate-100 pt-4 lg:grid-cols-3">
-          {/* Added Files */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Files Added ({summaries.length})
-            </h3>
-            <div className="space-y-1.5">
-              {summaries.map((file, idx) => (
-                <div
-                  key={`${file.fileName}-${idx}`}
-                  className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs"
-                >
-                  <FileSpreadsheet className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold text-slate-900">
-                      {file.fileName}
-                    </div>
-                    <div className="text-[11px] text-slate-600">
-                      {formatInt(file.lineCount)} rows
-                      {file.dateFrom && file.dateTo
-                        ? ` · ${file.dateFrom} to ${file.dateTo}`
-                        : ''}
-                    </div>
-                    {file.outlets.length > 0 && (
-                      <div className="mt-0.5 text-[11px] text-emerald-800">
-                        Found: {file.outlets.join(', ')}
-                      </div>
-                    )}
-                  </div>
+      <ul className="mt-2 space-y-1.5">
+        {summaries.map((file) => (
+          <li
+            key={file.fileId}
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs"
+          >
+            <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-700" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-semibold text-slate-900" title={file.fileName}>
+                {file.fileName}
+              </div>
+              <div className="text-[11px] text-slate-600">
+                {formatInt(file.lineCount)} item lines
+                {file.dateFrom && file.dateTo ? ` · ${file.dateFrom} to ${file.dateTo}` : ''}
+                {file.outlets.length > 0 ? ` · ${file.outlets.join(', ')}` : ''}
+              </div>
+              {file.duplicateOrdersSkipped ? (
+                <div className="text-[11px] text-amber-800">
+                  {formatInt(file.duplicateOrdersSkipped)} receipts skipped (already loaded from{' '}
+                  {file.duplicateOf?.join(', ')})
                 </div>
-              ))}
+              ) : null}
             </div>
-          </div>
+            <button
+              type="button"
+              onClick={() => onRemoveFile(file.fileId)}
+              aria-label={`Remove ${file.fileName}`}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 cursor-pointer"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
 
-          {/* Establishments Status */}
+      {expanded && (
+        <div className="mt-4 grid grid-cols-1 gap-4 border-t border-slate-100 pt-4 lg:grid-cols-2">
           <div className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Establishments Status
+              Outlets in this report
             </h3>
             <div className="space-y-1.5">
               {establishmentChecklist.map((item) => (
@@ -183,14 +133,13 @@ export const FileStatusPanel: React.FC<FileStatusPanelProps> = ({ dataset }) => 
                   <span className="text-[11px] font-medium">
                     {item.count > 0
                       ? `${formatInt(item.count)} lines${item.warn ? ' · check Mapping Rules' : ''}`
-                      : 'Not added yet'}
+                      : 'Not in loaded files'}
                   </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Report Data Coverage */}
           <div className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               Report Data Coverage
@@ -213,9 +162,7 @@ export const FileStatusPanel: React.FC<FileStatusPanelProps> = ({ dataset }) => 
                     )}
                     {c.label}
                   </span>
-                  <span className="text-[11px] font-medium">
-                    {c.done ? 'Ready' : 'Missing'}
-                  </span>
+                  <span className="text-[11px] font-medium">{c.done ? 'Ready' : 'Missing'}</span>
                 </div>
               ))}
             </div>

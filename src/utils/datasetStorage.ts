@@ -23,47 +23,54 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveDatasetToStorage(dataset: ParsedDataset): Promise<void> {
+// v2 stores one entry per uploaded file so files can be removed individually.
+const FILES_KEY = 'active_files_v2';
+
+async function withStore<T>(
+  mode: IDBTransactionMode,
+  fn: (store: IDBObjectStore) => IDBRequest | void
+): Promise<T | undefined> {
+  const db = await openDb();
   try {
-    const db = await openDb();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).put(dataset, ACTIVE_KEY);
-      tx.oncomplete = () => resolve();
+    return await new Promise<T | undefined>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, mode);
+      const req = fn(tx.objectStore(STORE_NAME));
+      tx.oncomplete = () => resolve(req ? (req.result as T) : undefined);
       tx.onerror = () => reject(tx.error);
     });
+  } finally {
     db.close();
+  }
+}
+
+export async function saveFilesToStorage(files: ParsedDataset[]): Promise<void> {
+  try {
+    await withStore('readwrite', (store) => {
+      store.put(files, FILES_KEY);
+      // Data saved by older versions is in a different format; drop it.
+      store.delete(ACTIVE_KEY);
+    });
   } catch {
     // Ignore storage errors (e.g. private browsing restrictions)
   }
 }
 
-export async function loadDatasetFromStorage(): Promise<ParsedDataset | null> {
+export async function loadFilesFromStorage(): Promise<ParsedDataset[]> {
   try {
-    const db = await openDb();
-    const result = await new Promise<ParsedDataset | null>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const req = tx.objectStore(STORE_NAME).get(ACTIVE_KEY);
-      req.onsuccess = () => resolve((req.result as ParsedDataset | undefined) ?? null);
-      req.onerror = () => reject(req.error);
-    });
-    db.close();
-    return result;
+    const files = await withStore<ParsedDataset[] | undefined>('readonly', (store) =>
+      store.get(FILES_KEY)
+    );
+    return Array.isArray(files) ? files : [];
   } catch {
-    return null;
+    return [];
   }
 }
 
-export async function clearDatasetFromStorage(): Promise<void> {
+export async function clearAllStoredData(): Promise<void> {
   try {
-    const db = await openDb();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).delete(ACTIVE_KEY);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+    await withStore('readwrite', (store) => {
+      store.clear();
     });
-    db.close();
   } catch {
     // Ignore storage errors
   }

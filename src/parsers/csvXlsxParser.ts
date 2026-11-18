@@ -1,6 +1,6 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-import type { MappingRules, Outlet, ParsedDataset, PosOrderLine } from '../types/pos';
+import type { MappingRules, OrderStatus, Outlet, ParsedDataset, PosOrderLine } from '../types/pos';
 import {
   inferFoodBev,
   inferOutletFromConfig,
@@ -23,6 +23,8 @@ interface ColumnMap {
   qty?: string;
   subtotal?: string;
   discount?: string;
+  orderTotal?: string;
+  lineTaxIncl?: string;
   paymentMethod?: string;
 }
 
@@ -60,7 +62,8 @@ function findExactColumn(headers: string[], candidates: string[]): string | unde
 }
 
 /** Odoo order states that are not real sales. */
-const VOID_STATUSES = new Set(['cancelled', 'canceled', 'cancel', 'draft', 'new']);
+const CANCELLED_STATUSES = new Set(['cancelled', 'canceled', 'cancel']);
+const DRAFT_STATUSES = new Set(['draft', 'new']);
 
 function detectColumns(headers: string[]): ColumnMap {
   return {
@@ -139,6 +142,14 @@ function detectColumns(headers: string[]): ColumnMap {
       'amount',
     ]),
     discount: findColumn(headers, ['lines / discount (%)', 'discount (%)', 'discount']),
+    orderTotal: findExactColumn(headers, ['total', 'amount total', 'order total']),
+    lineTaxIncl: findExactColumn(headers, [
+      'order lines / tax incl.',
+      'order lines / tax incl',
+      'lines / tax incl.',
+      'lines / tax incl',
+      'tax incl.',
+    ]),
     paymentMethod: findColumn(headers, [
       'payments / payment method',
       'payment methods',
@@ -268,7 +279,8 @@ export function parseDateTime(
 export function normalizeRows(
   rows: RawRow[],
   fileName: string,
-  rules: MappingRules
+  rules: MappingRules,
+  fileId: string = fileName
 ): ParsedDataset {
   const warnings: string[] = [];
   if (rows.length === 0) {
@@ -284,6 +296,9 @@ export function normalizeRows(
         hasOrderLevelTransactions: false,
         sourceFiles: [fileName],
       },
+      fileSummaries: [
+        { fileId, fileName, rowsRead: 0, lineCount: 0, outlets: [], dateFrom: null, dateTo: null, hasHourly: false, hasGuests: false },
+      ],
       warnings: [`No rows found in ${fileName}.`],
     };
   }
@@ -304,10 +319,14 @@ export function normalizeRows(
   let orderSeq = 0;
   let lastIdentity = '';
   let lastStatus = '';
-  const voidOrders = new Set<string>();
-  let voidSales = 0;
+  let lastReceipt = '';
+  let lastNaturalKey = '';
+  let lastIsRefund = false;
 
   const lines: PosOrderLine[] = [];
+  // Per-receipt data used to check line signs against Odoo's order Total
+  let lastHeaderTotal: number | null = null;
+  const receiptChecks = new Map<string, { total: number | null; idx: number[]; incl: number[]; qty: number[] }>();
   let lastOrderRef = '';
   let lastParsedDate: { iso: string; dateKey: string; hour: number | null } | null = null;
   let lastConfig = '';
@@ -315,6 +334,7 @@ export function normalizeRows(
   let lastPayment = '';
 
   const excludedCounts = new Map<Outlet, number>();
+  const excludedSales = new Map<Outlet, number>();
 
   let hasHourly = false;
   let hasDailyItems = false;
@@ -337,8 +357,18 @@ export function normalizeRows(
         orderSeq += 1;
         lastIdentity = identity;
       }
-      lastOrderRef = `${fileName}::${rawOrderRef || rawReceipt}#${orderSeq}`;
+      lastOrderRef = `${fileId}::${rawOrderRef || rawReceipt}#${orderSeq}`;
       lastStatus = rawStatus.toLowerCase();
+      lastReceipt =
+        rawReceipt && rawOrderRef && rawOrderRef !== '/'
+          ? `${rawReceipt} (${rawOrderRef})`
+          : rawReceipt || rawOrderRef;
+      const headerDate = parseDateTime(rawDateVal);
+      lastNaturalKey = `${rawReceipt || rawOrderRef}|${headerDate?.iso ?? String(rawDateVal ?? '')}`;
+      lastIsRefund = /refund/i.test(rawOrderRef);
+      const rawTotal = cols.orderTotal ? row[cols.orderTotal] : undefined;
+      lastHeaderTotal =
+        rawTotal === undefined || rawTotal === null || rawTotal === '' ? null : parseNumber(rawTotal);
       hasOrderRef = true;
       lastGuests =
         rawGuestsVal !== undefined && rawGuestsVal !== '' && rawGuestsVal !== null
@@ -376,13 +406,16 @@ export function normalizeRows(
     }
     if (isExcludedOutlet(outlet)) {
       excludedCounts.set(outlet, (excludedCounts.get(outlet) ?? 0) + 1);
+      excludedSales.set(outlet, (excludedSales.get(outlet) ?? 0) + subtotal);
       return;
     }
-    if (lastStatus && VOID_STATUSES.has(lastStatus)) {
-      voidOrders.add(lastOrderRef);
-      voidSales += subtotal;
-      return;
-    }
+    const orderStatus: OrderStatus = !lastStatus
+      ? 'valid'
+      : CANCELLED_STATUSES.has(lastStatus)
+        ? 'cancelled'
+        : DRAFT_STATUSES.has(lastStatus)
+          ? 'draft'
+          : 'valid';
 
     const effectiveDate = parsedDate ?? lastParsedDate;
     if (effectiveDate) {
@@ -396,14 +429,27 @@ export function normalizeRows(
     const orderRef = lastOrderRef || `ROW-${idx + 1}`;
     const foodBev = inferFoodBev(category, product, rules);
 
+    if (cols.orderTotal && cols.lineTaxIncl) {
+      const check = receiptChecks.get(orderRef) ?? { total: lastHeaderTotal, idx: [], incl: [], qty: [] };
+      check.idx.push(lines.length);
+      check.incl.push(parseNumber(row[cols.lineTaxIncl]));
+      check.qty.push(qty);
+      receiptChecks.set(orderRef, check);
+    }
+
     lines.push({
-      id: `${fileName}-${idx}`,
+      id: `${fileId}-${idx}`,
       orderRef,
       orderDate: effectiveDate?.iso ?? null,
       dateKey: effectiveDate?.dateKey ?? null,
       hour: effectiveDate?.hour ?? null,
       rawConfig: effectiveConfig,
       outlet,
+      sourceFile: fileId,
+      orderKey: lastNaturalKey ? `${outlet}|${lastNaturalKey}` : `${fileId}|ROW-${idx + 1}`,
+      receipt: lastReceipt || orderRef,
+      orderStatus,
+      isRefund: lastIsRefund,
       guests,
       product: product || 'Order Total',
       category,
@@ -416,13 +462,37 @@ export function normalizeRows(
     });
   });
 
+  // Some Odoo exports (seen in 2026) lose the minus sign on refund lines:
+  // quantity is negative but the amount is positive, so the lines no longer
+  // add up to the receipt's own Total. Fix the sign only where that makes
+  // the receipt match its Total.
+  const TOL = 0.05;
+  let signFixedReceipts = 0;
+  let signFixedLines = 0;
+  for (const check of receiptChecks.values()) {
+    if (check.total === null) continue;
+    const sum = check.incl.reduce((a, b) => a + b, 0);
+    if (Math.abs(sum - check.total) <= TOL) continue;
+    let flip: boolean[] | null = null;
+    if (Math.abs(-sum - check.total) <= TOL) {
+      flip = check.incl.map((v) => v !== 0);
+    } else {
+      const byQty = check.incl.map((v, i) => check.qty[i] < 0 && v > 0);
+      const fixed = check.incl.reduce((a, v, i) => a + (byQty[i] ? -v : v), 0);
+      if (Math.abs(fixed - check.total) <= TOL) flip = byQty;
+    }
+    if (!flip || !flip.some(Boolean)) continue;
+    signFixedReceipts += 1;
+    flip.forEach((f, i) => {
+      if (!f) return;
+      const line = lines[check.idx[i]];
+      line.subtotal = -line.subtotal;
+      signFixedLines += 1;
+    });
+  }
+
   const excludedNote = describeExcluded(excludedCounts);
   if (excludedNote) warnings.push(excludedNote);
-  if (voidOrders.size > 0) {
-    warnings.push(
-      `Skipped ${voidOrders.size.toLocaleString('en-US')} cancelled/draft order${voidOrders.size === 1 ? '' : 's'} in ${fileName} (RM ${voidSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} before tax).`
-    );
-  }
 
   const dates = lines
     .map((l) => l.dateKey)
@@ -446,8 +516,28 @@ export function normalizeRows(
     },
     fileSummaries: [
       {
+        fileId,
         fileName,
+        rowsRead: rows.length,
         lineCount: lines.length,
+        columns: {
+          orderRef: cols.orderRef,
+          receipt: cols.receipt,
+          date: cols.orderDate,
+          outlet: cols.config,
+          status: cols.status,
+          guests: cols.guests,
+          product: cols.product,
+          category: cols.category,
+          qty: cols.qty,
+          sales: cols.subtotal,
+        },
+        signFixes: signFixedReceipts > 0 ? { receipts: signFixedReceipts, lines: signFixedLines } : undefined,
+        excluded: Array.from(excludedCounts.entries()).map(([outlet, n]) => ({
+          outlet,
+          lines: n,
+          sales: excludedSales.get(outlet) ?? 0,
+        })),
         outlets,
         dateFrom: dates[0] ?? null,
         dateTo: dates[dates.length - 1] ?? null,
@@ -461,7 +551,8 @@ export function normalizeRows(
 
 export async function parseCsvOrXlsxFile(
   file: File,
-  rules: MappingRules
+  rules: MappingRules,
+  fileId: string = file.name
 ): Promise<ParsedDataset> {
   const ext = file.name.split('.').pop()?.toLowerCase();
 
@@ -471,7 +562,7 @@ export async function parseCsvOrXlsxFile(
       header: true,
       skipEmptyLines: true,
     });
-    return normalizeRows(parsed.data, file.name, rules);
+    return normalizeRows(parsed.data, file.name, rules, fileId);
   }
 
   const buffer = await file.arrayBuffer();
@@ -479,5 +570,5 @@ export async function parseCsvOrXlsxFile(
   const firstSheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[firstSheetName];
   const rows = XLSX.utils.sheet_to_json<RawRow>(sheet, { defval: '' });
-  return normalizeRows(rows, file.name, rules);
+  return normalizeRows(rows, file.name, rules, fileId);
 }

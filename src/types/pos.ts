@@ -20,7 +20,8 @@ export type Outlet = (typeof OUTLETS)[number];
 
 export type FoodBevType = 'Food' | 'Beverage' | 'Other';
 
-export type OutletFilter = 'compare' | Outlet;
+/** 'valid' orders count as sales; cancelled/draft are shown separately only. */
+export type OrderStatus = 'valid' | 'cancelled' | 'draft';
 
 export interface PosOrderLine {
   id: string;
@@ -30,6 +31,15 @@ export interface PosOrderLine {
   hour: number | null; // 0-23
   rawConfig: string;
   outlet: Outlet;
+  /** Id of the uploaded file this line came from */
+  sourceFile: string;
+  /** File-independent order identity, used to detect duplicate uploads */
+  orderKey: string;
+  /** Receipt number / order ref as shown in Odoo, for display */
+  receipt: string;
+  orderStatus: OrderStatus;
+  /** Order is an Odoo refund (ref contains "REFUND") */
+  isRefund: boolean;
   guests: number | null;
   product: string;
   category: string;
@@ -66,9 +76,29 @@ export interface DatasetCapabilities {
   sourceFiles: string[];
 }
 
+export interface ExcludedOutletCount {
+  outlet: Outlet;
+  lines: number;
+  sales: number;
+}
+
 export interface UploadedFileSummary {
+  /** Unique id (file name + upload time) */
+  fileId: string;
   fileName: string;
+  /** SHA-256 of the file bytes, when available */
+  contentHash?: string;
+  uploadedAt?: string;
+  rowsRead?: number;
   lineCount: number;
+  /** Which spreadsheet column each figure was read from */
+  columns?: Partial<Record<'orderRef' | 'receipt' | 'date' | 'outlet' | 'status' | 'guests' | 'product' | 'category' | 'qty' | 'sales', string>>;
+  excluded?: ExcludedOutletCount[];
+  /** Receipts whose line signs were corrected to match the order Total */
+  signFixes?: { receipts: number; lines: number };
+  /** Orders skipped because they were already loaded from another file */
+  duplicateOrdersSkipped?: number;
+  duplicateOf?: string[];
   outlets: string[];
   dateFrom: string | null;
   dateTo: string | null;
@@ -93,7 +123,8 @@ export interface MappingRules {
 }
 
 export interface FilterState {
-  outletFilter: OutletFilter;
+  /** Selected outlets; empty = all outlets */
+  outlets: Outlet[];
   dateFrom: string;
   dateTo: string;
   foodBevFilter: 'All' | FoodBevType;

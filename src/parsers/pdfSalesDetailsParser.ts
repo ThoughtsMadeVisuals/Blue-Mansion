@@ -31,13 +31,15 @@ function parseRm(str: string): number {
 export function parseSalesDetailsTextLines(
   textLines: string[],
   fileName: string,
-  rules: MappingRules
+  rules: MappingRules,
+  fileId: string = fileName
 ): ParsedDataset {
   const lines: PosOrderLine[] = [];
   const pdfPayments: PdfPaymentSummary[] = [];
   const pdfDailySessions: PdfDailySessionRow[] = [];
   const warnings: string[] = [];
   const excludedCounts = new Map<Outlet, number>();
+  const excludedSales = new Map<Outlet, number>();
 
   let section: 'header' | 'sales' | 'taxes' | 'payments' | 'sessions' = 'header';
   let currentCategory = 'Uncategorized';
@@ -119,12 +121,18 @@ export function parseSalesDetailsTextLines(
         const outlet = inferOutletFromHeuristics(currentCategory, product, rules);
         if (isExcludedOutlet(outlet)) {
           excludedCounts.set(outlet, (excludedCounts.get(outlet) ?? 0) + 1);
+          excludedSales.set(outlet, (excludedSales.get(outlet) ?? 0) + subtotal);
           continue;
         }
         const foodBev = inferFoodBev(currentCategory, product, rules);
 
         lines.push({
-          id: `${fileName}-pdf-${i}`,
+          id: `${fileId}-pdf-${i}`,
+          sourceFile: fileId,
+          orderKey: `${fileId}|pdf-${i}`,
+          receipt: '',
+          orderStatus: 'valid',
+          isRefund: false,
           orderRef: `PDF-SUMMARY-${i}`,
           orderDate: null,
           dateKey: null,
@@ -210,13 +218,21 @@ export function parseSalesDetailsTextLines(
     },
     fileSummaries: [
       {
+        fileId,
         fileName,
+        rowsRead: textLines.length,
         lineCount: lines.length,
         outlets: ['PDF Summary'],
         dateFrom: null,
         dateTo: null,
         hasHourly: false,
         hasGuests: false,
+        columns: { sales: 'PDF "Sales" section amounts (RM)' },
+        excluded: Array.from(excludedCounts.entries()).map(([outlet, n]) => ({
+          outlet,
+          lines: n,
+          sales: excludedSales.get(outlet) ?? 0,
+        })),
       },
     ],
     warnings,
@@ -225,7 +241,8 @@ export function parseSalesDetailsTextLines(
 
 export async function parseSalesDetailsPdfFile(
   file: File,
-  rules: MappingRules
+  rules: MappingRules,
+  fileId: string = file.name
 ): Promise<ParsedDataset> {
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
@@ -254,5 +271,5 @@ export async function parseSalesDetailsPdfFile(
     }
   }
 
-  return parseSalesDetailsTextLines(allLines, file.name, rules);
+  return parseSalesDetailsTextLines(allLines, file.name, rules, fileId);
 }

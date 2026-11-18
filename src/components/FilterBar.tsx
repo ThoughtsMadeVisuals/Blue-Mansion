@@ -7,10 +7,9 @@ import {
   Printer,
   Search,
   SlidersHorizontal,
-  Trash2,
   X,
 } from 'lucide-react';
-import type { FilterState, Outlet, OutletFilter } from '../types/pos';
+import type { FilterState, Outlet } from '../types/pos';
 import { OUTLET_INFO } from '../utils/defaultMappings';
 
 interface FilterBarProps {
@@ -23,7 +22,6 @@ interface FilterBarProps {
   unassignedCount: number;
   outletsInData: Outlet[];
   onOpenMapping: () => void;
-  onClearData: () => void;
 }
 
 
@@ -37,19 +35,17 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   unassignedCount,
   outletsInData,
   onOpenMapping,
-  onClearData,
 }) => {
   const [dateMode, setDateMode] = useState<'range' | 'single'>('range');
 
-  const outletOptions: { value: OutletFilter; label: string; title: string; color?: string }[] = [
-    { value: 'compare', label: 'All Outlets', title: 'All outlets, each shown separately' },
-    ...outletsInData.map((o) => ({
-      value: o as OutletFilter,
-      label: o,
-      title: OUTLET_INFO[o].name,
-      color: OUTLET_INFO[o].color,
-    })),
-  ];
+  const toggleOutlet = (o: Outlet) => {
+    const set = new Set(filters.outlets);
+    if (set.has(o)) set.delete(o);
+    else set.add(o);
+    // Selecting every outlet is the same as "All"
+    const next = outletsInData.filter((x) => set.has(x));
+    onChange({ ...filters, outlets: next.length === outletsInData.length ? [] : next });
+  };
 
   useEffect(() => {
     if (filters.dateFrom && filters.dateFrom === filters.dateTo) {
@@ -98,29 +94,50 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Outlet Switcher */}
         <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1">
-          {outletOptions.map((opt) => {
-            const active = filters.outletFilter === opt.value;
+          <span className="px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            POS
+          </span>
+          <button
+            type="button"
+            title="All outlets"
+            aria-pressed={filters.outlets.length === 0}
+            onClick={() => onChange({ ...filters, outlets: [] })}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+              filters.outlets.length === 0
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            All Outlets
+          </button>
+          {outletsInData.map((o) => {
+            const active = filters.outlets.includes(o);
             return (
               <button
-                key={opt.value}
+                key={o}
                 type="button"
-                title={opt.title}
+                title={`${OUTLET_INFO[o].name} — click to add or remove`}
                 aria-pressed={active}
-                onClick={() => onChange({ ...filters, outletFilter: opt.value })}
+                onClick={() => toggleOutlet(o)}
                 className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
                   active
-                    ? 'bg-white text-slate-900 shadow-sm'
+                    ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-300'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {opt.color && (
-                  <span
-                    aria-hidden="true"
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: opt.color }}
-                  />
-                )}
-                {opt.label}
+                <span
+                  aria-hidden="true"
+                  className={`flex h-3.5 w-3.5 items-center justify-center rounded border text-[9px] font-bold text-white ${
+                    active ? '' : 'bg-white'
+                  }`}
+                  style={{
+                    borderColor: OUTLET_INFO[o].color,
+                    backgroundColor: active ? OUTLET_INFO[o].color : undefined,
+                  }}
+                >
+                  {active ? '✓' : ''}
+                </span>
+                {o}
               </button>
             );
           })}
@@ -310,14 +327,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             Print / PDF
           </button>
 
-          <button
-            type="button"
-            onClick={onClearData}
-            title="Clear loaded data"
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-rose-50 hover:text-rose-600 cursor-pointer"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+
         </div>
       </div>
     </div>

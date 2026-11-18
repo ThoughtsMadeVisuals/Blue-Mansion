@@ -70,6 +70,25 @@ export interface DailyAggRow {
   totalGuests: number;
 }
 
+/** One receipt, used for the cancelled and refund lists. */
+export interface ReceiptRow {
+  orderRef: string;
+  receipt: string;
+  outlet: Outlet;
+  dateTime: string | null;
+  status: PosOrderLine['orderStatus'];
+  isRefund: boolean;
+  sales: number;
+  qty: number;
+  items: string[];
+  sourceFile: string;
+}
+
+export interface ReceiptGroupSummary {
+  orders: number;
+  sales: number;
+}
+
 export interface AggregatedReport {
   kpis: {
     byOutlet: Record<Outlet, OutletMetrics>;
@@ -96,6 +115,12 @@ export interface AggregatedReport {
   allCategories: string[];
   allProducts: string[];
   unassignedItemsCount: number;
+  /** Cancelled / draft receipts (never counted in sales), newest first */
+  voidReceipts: ReceiptRow[];
+  voidSummary: { cancelled: ReceiptGroupSummary; draft: ReceiptGroupSummary };
+  /** Refund receipts (included in sales as negative amounts), newest first */
+  refunds: ReceiptRow[];
+  refundSummary: ReceiptGroupSummary;
 }
 
 export interface ItemDailyPoint {
@@ -156,21 +181,55 @@ export function reapplyMappings(
   };
 }
 
-function matchesOutletFilter(line: PosOrderLine, filter: FilterState['outletFilter']): boolean {
-  if (filter === 'compare') return true;
-  return line.outlet === filter;
+function matchesOutletFilter(line: PosOrderLine, outlets: FilterState['outlets']): boolean {
+  return outlets.length === 0 || outlets.includes(line.outlet);
 }
+
+function matchesDateFilter(line: PosOrderLine, filters: FilterState): boolean {
+  if (filters.dateFrom && line.dateKey && line.dateKey < filters.dateFrom) return false;
+  if (filters.dateTo && line.dateKey && line.dateKey > filters.dateTo) return false;
+  return true;
+}
+
+/** Group lines into receipts (one row per order). */
+function buildReceipts(lines: PosOrderLine[]): ReceiptRow[] {
+  const map = new Map<string, ReceiptRow>();
+  for (const l of lines) {
+    let row = map.get(l.orderRef);
+    if (!row) {
+      row = {
+        orderRef: l.orderRef,
+        receipt: l.receipt,
+        outlet: l.outlet,
+        dateTime: l.orderDate,
+        status: l.orderStatus,
+        isRefund: l.isRefund,
+        sales: 0,
+        qty: 0,
+        items: [],
+        sourceFile: l.sourceFile,
+      };
+      map.set(l.orderRef, row);
+    }
+    row.sales += l.subtotal;
+    row.qty += l.qty;
+    if (row.items.length < 50) row.items.push(`${l.qty} × ${l.product}`);
+  }
+  return Array.from(map.values()).sort((a, b) =>
+    (b.dateTime ?? '').localeCompare(a.dateTime ?? '')
+  );
+}
+
+const sumGroup = (rows: ReceiptRow[]): ReceiptGroupSummary => ({
+  orders: rows.length,
+  sales: rows.reduce((acc, r) => acc + r.sales, 0),
+});
 
 function matchesNonOutletFilters(line: PosOrderLine, filters: FilterState): boolean {
   if (filters.foodBevFilter !== 'All' && line.foodBev !== filters.foodBevFilter) {
     return false;
   }
-  if (filters.dateFrom && line.dateKey && line.dateKey < filters.dateFrom) {
-    return false;
-  }
-  if (filters.dateTo && line.dateKey && line.dateKey > filters.dateTo) {
-    return false;
-  }
+  if (!matchesDateFilter(line, filters)) return false;
   if (filters.searchQuery) {
     const q = filters.searchQuery.toLowerCase();
     if (
@@ -283,18 +342,37 @@ export function aggregateDataset(
   const outletSet = new Set<Outlet>();
   let unassignedItemsCount = 0;
 
+  const validLines: PosOrderLine[] = [];
+  const voidLines: PosOrderLine[] = [];
   for (const l of dataset.lines) {
+    outletSet.add(l.outlet);
+    // Lines from files saved before order status existed count as valid
+    if (l.orderStatus && l.orderStatus !== 'valid') {
+      voidLines.push(l);
+      continue;
+    }
+    validLines.push(l);
     categorySet.add(l.category);
     productSet.add(l.product);
-    outletSet.add(l.outlet);
     if (l.outlet === 'Unassigned') unassignedItemsCount++;
   }
 
-  const nonOutletFiltered = dataset.lines.filter((line) =>
+  const nonOutletFiltered = validLines.filter((line) =>
     matchesNonOutletFilters(line, filters)
   );
   const filtered = nonOutletFiltered.filter((line) =>
-    matchesOutletFilter(line, filters.outletFilter)
+    matchesOutletFilter(line, filters.outlets)
+  );
+
+  // Cancelled / draft receipts and refunds follow the outlet & date filters
+  const scope = (l: PosOrderLine) =>
+    matchesOutletFilter(l, filters.outlets) && matchesDateFilter(l, filters);
+  const voidReceipts = buildReceipts(voidLines.filter(scope));
+  const scopedValid = validLines.filter(scope);
+  const orderNet = new Map<string, number>();
+  for (const l of scopedValid) orderNet.set(l.orderRef, (orderNet.get(l.orderRef) ?? 0) + l.subtotal);
+  const refunds = buildReceipts(
+    scopedValid.filter((l) => l.isRefund || (orderNet.get(l.orderRef) ?? 0) < 0)
   );
 
   const outletSales: Record<Outlet, { sales: number; qty: number; tx: number; guests: number }> =
@@ -483,6 +561,13 @@ export function aggregateDataset(
     allCategories: Array.from(categorySet).sort(),
     allProducts: Array.from(productSet).sort(),
     unassignedItemsCount,
+    voidReceipts,
+    voidSummary: {
+      cancelled: sumGroup(voidReceipts.filter((r) => r.status === 'cancelled')),
+      draft: sumGroup(voidReceipts.filter((r) => r.status === 'draft')),
+    },
+    refunds,
+    refundSummary: sumGroup(refunds),
   };
 }
 
@@ -505,7 +590,8 @@ export function aggregateItemTrend(
 
   for (const line of dataset.lines) {
     if (line.product.toLowerCase() !== target) continue;
-    if (!matchesOutletFilter(line, filters.outletFilter)) continue;
+    if (line.orderStatus && line.orderStatus !== 'valid') continue;
+    if (!matchesOutletFilter(line, filters.outlets)) continue;
     if (filters.foodBevFilter !== 'All' && line.foodBev !== filters.foodBevFilter) continue;
     if (filters.dateFrom && line.dateKey && line.dateKey < filters.dateFrom) continue;
     if (filters.dateTo && line.dateKey && line.dateKey > filters.dateTo) continue;

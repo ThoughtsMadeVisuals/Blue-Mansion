@@ -1,15 +1,15 @@
 import React from 'react';
 import { Store } from 'lucide-react';
 import type { OutletBreakdownRow } from '../utils/aggregator';
-import type { DatasetCapabilities, Outlet, OutletFilter } from '../types/pos';
+import type { DatasetCapabilities, Outlet } from '../types/pos';
 import { OUTLET_INFO } from '../utils/defaultMappings';
 import { formatInt, formatRM } from '../utils/formatters';
 
 interface OutletBreakdownPanelProps {
   rows: OutletBreakdownRow[];
   capabilities: DatasetCapabilities;
-  activeOutlet: OutletFilter;
-  onSelectOutlet: (outlet: OutletFilter) => void;
+  activeOutlets: Outlet[];
+  onChangeOutlets: (outlets: Outlet[]) => void;
 }
 
 /**
@@ -19,9 +19,12 @@ interface OutletBreakdownPanelProps {
 export const OutletBreakdownPanel: React.FC<OutletBreakdownPanelProps> = ({
   rows,
   capabilities,
-  activeOutlet,
-  onSelectOutlet,
+  activeOutlets,
+  onChangeOutlets,
 }) => {
+  // Clicking a row shows only that outlet; clicking it again shows all
+  const selectOnly = (o: Outlet) =>
+    onChangeOutlets(activeOutlets.length === 1 && activeOutlets[0] === o ? [] : [o]);
   if (rows.length === 0) return null;
 
   const hasTx = capabilities.hasOrderLevelTransactions;
@@ -51,7 +54,7 @@ export const OutletBreakdownPanel: React.FC<OutletBreakdownPanelProps> = ({
           <h3 className="text-sm font-semibold text-slate-900">Sales by Outlet</h3>
         </div>
         <p className="text-[11px] text-slate-500">
-          Each outlet reported separately · click a row to view that outlet only
+          Each outlet reported separately · click a row to view only that outlet, or use the POS buttons above to combine outlets
         </p>
       </div>
 
@@ -74,11 +77,11 @@ export const OutletBreakdownPanel: React.FC<OutletBreakdownPanelProps> = ({
           <tbody className="divide-y divide-slate-100">
             {rows.map((r) => {
               const info = OUTLET_INFO[r.outlet as Outlet];
-              const active = activeOutlet === r.outlet;
+              const active = activeOutlets.includes(r.outlet);
               return (
                 <tr
                   key={r.outlet}
-                  onClick={() => onSelectOutlet(active ? 'compare' : r.outlet)}
+                  onClick={() => selectOnly(r.outlet)}
                   className={`cursor-pointer transition ${
                     active ? 'bg-slate-100' : 'hover:bg-slate-50'
                   }`}
@@ -88,7 +91,7 @@ export const OutletBreakdownPanel: React.FC<OutletBreakdownPanelProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSelectOutlet(active ? 'compare' : r.outlet);
+                        selectOnly(r.outlet);
                       }}
                       aria-pressed={active}
                       className="inline-flex items-center gap-2 text-left font-medium text-slate-800 cursor-pointer"

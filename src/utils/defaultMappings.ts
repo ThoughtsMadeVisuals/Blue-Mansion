@@ -332,3 +332,12 @@ export function saveMappingRules(rules: MappingRules): void {
     // Ignore storage quota errors
   }
 }
+
+export function clearMappingRules(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}

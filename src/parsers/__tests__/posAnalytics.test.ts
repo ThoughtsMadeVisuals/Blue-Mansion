@@ -9,7 +9,7 @@ import {
 import type { FilterState } from '../../types/pos';
 
 const DEFAULT_FILTERS: FilterState = {
-  outletFilter: 'compare',
+  outlets: [],
   dateFrom: '',
   dateTo: '',
   foodBevFilter: 'All',
@@ -303,7 +303,11 @@ describe('separate outlet entities', () => {
     expect(report.kpis.total.sales).toBe(75);
     expect(report.kpis.total.transactions).toBe(3);
     expect(report.kpis.total.guests).toBe(6);
-    expect(dataset.warnings.join(' ')).toContain('Skipped 1 cancelled/draft order');
+    expect(report.voidSummary.cancelled).toEqual({ orders: 1, sales: 155 });
+    expect(report.voidReceipts[0].receipt).toBe('261-1-0003');
+    expect(report.voidReceipts[0].items).toEqual(['5 × Laksa', '1 × Kopi']);
+    // Cancelled lines never reach item totals
+    expect(report.salesByItem.find((i) => i.product === 'Laksa')?.totalQty).toBe(2);
   });
 
   it('keeps flat exports (order columns repeated on every line) as one order', () => {
