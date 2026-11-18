@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, CheckCircle2 } from 'lucide-react';
-import type { FilterState, MappingRules, ParsedDataset } from './types/pos';
-import { loadMappingRules, saveMappingRules } from './utils/defaultMappings';
+import type { FilterState, MappingRules, Outlet, ParsedDataset } from './types/pos';
+import { OUTLET_INFO, loadMappingRules, saveMappingRules } from './utils/defaultMappings';
 import {
   clearDatasetFromStorage,
   loadDatasetFromStorage,
@@ -23,9 +23,10 @@ import { GuestsAndTransactionsPanel } from './components/GuestsAndTransactionsPa
 import { SalesByItemChart } from './components/SalesByItemChart';
 import { SalesByItemTable } from './components/SalesByItemTable';
 import { MappingModal } from './components/MappingModal';
+import { OutletBreakdownPanel } from './components/OutletBreakdownPanel';
 
 const INITIAL_FILTERS: FilterState = {
-  outletFilter: 'Mangga',
+  outletFilter: 'compare',
   dateFrom: '',
   dateTo: '',
   foodBevFilter: 'All',
@@ -34,13 +35,12 @@ const INITIAL_FILTERS: FilterState = {
 
 function getOutletLabel(filter: FilterState['outletFilter']): string {
   if (filter === 'compare') return 'All Outlets';
-  return filter;
+  return OUTLET_INFO[filter].name;
 }
 
 function getAccentColor(filter: FilterState['outletFilter']): string {
-  if (filter === 'Indigo Bar') return '#4f46e5';
   if (filter === 'compare') return '#334155';
-  return '#10b981';
+  return OUTLET_INFO[filter].color;
 }
 
 function mergeDatasets(existing: ParsedDataset | null, incoming: ParsedDataset): ParsedDataset {
@@ -144,10 +144,34 @@ export function App() {
     }
   };
 
+  // Distinct POS config/session names, with the outlet each currently maps to
+  const configNames = useMemo(() => {
+    if (!dataset) return [];
+    const map = new Map<string, { name: string; outlet: Outlet; lines: number }>();
+    for (const l of dataset.lines) {
+      if (l.sourceType !== 'csv_xlsx' || !l.rawConfig) continue;
+      const prev = map.get(l.rawConfig);
+      if (prev) prev.lines += 1;
+      else map.set(l.rawConfig, { name: l.rawConfig, outlet: l.outlet, lines: 1 });
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [dataset]);
+
   const report = useMemo(() => {
     if (!dataset) return null;
     return aggregateDataset(dataset, filters);
   }, [dataset, filters]);
+
+  // If the selected outlet no longer has data (e.g. after remapping), fall back to All
+  useEffect(() => {
+    if (
+      report &&
+      filters.outletFilter !== 'compare' &&
+      !report.outletsInData.includes(filters.outletFilter)
+    ) {
+      setFilters((prev) => ({ ...prev, outletFilter: 'compare' }));
+    }
+  }, [report, filters.outletFilter]);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-16">
@@ -223,6 +247,7 @@ export function App() {
               allProducts={report.allProducts}
               allCategories={report.allCategories}
               unassignedCount={report.unassignedItemsCount}
+              outletsInData={report.outletsInData}
               onOpenMapping={() => setIsMappingOpen(true)}
               onClearData={() => {
                 setDataset(null);
@@ -252,6 +277,15 @@ export function App() {
               outletLabel={getOutletLabel(filters.outletFilter)}
             />
 
+            <OutletBreakdownPanel
+              rows={report.outletBreakdown}
+              capabilities={dataset.capabilities}
+              activeOutlet={filters.outletFilter}
+              onSelectOutlet={(outlet) =>
+                setFilters((prev) => ({ ...prev, outletFilter: outlet }))
+              }
+            />
+
             <MostSoldItemsPanel
               topFood={report.topFood}
               topBeverage={report.topBeverage}
@@ -275,6 +309,7 @@ export function App() {
               />
               <DailySalesChart
                 dailySales={report.dailySales}
+                outletsInData={filters.outletFilter === 'compare' ? report.outletsInData : null}
                 dailyPaymentsFallback={report.dailyPaymentsFallback}
                 hasDailyItems={dataset.capabilities.hasDailyItems}
                 outletLabel={getOutletLabel(filters.outletFilter)}
@@ -315,13 +350,16 @@ export function App() {
               onSelectProduct={setSelectedProduct}
             />
 
+            {isMappingOpen && (
             <MappingModal
               isOpen={isMappingOpen}
               onClose={() => setIsMappingOpen(false)}
               categories={report.allCategories}
+              configNames={configNames}
               rules={rules}
               onSave={handleSaveRules}
             />
+            )}
           </>
         )}
       </main>

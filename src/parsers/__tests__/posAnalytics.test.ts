@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { normalizeRows, parseDateTime, parseNumber } from '../csvXlsxParser';
 import { parseSalesDetailsTextLines } from '../pdfSalesDetailsParser';
 import { aggregateDataset, aggregateItemTrend } from '../../utils/aggregator';
-import { createDefaultMappingRules } from '../../utils/defaultMappings';
+import {
+  createDefaultMappingRules,
+  inferOutletFromConfig,
+} from '../../utils/defaultMappings';
 import type { FilterState } from '../../types/pos';
 
 const DEFAULT_FILTERS: FilterState = {
@@ -69,20 +72,20 @@ describe('csvXlsxParser', () => {
     expect(dataset.capabilities.hasOrderLevelTransactions).toBe(true);
 
     const report = aggregateDataset(dataset, DEFAULT_FILTERS);
-    expect(report.kpis.mangga.sales).toBeCloseTo(113);
-    expect(report.kpis.mangga.transactions).toBe(1);
-    expect(report.kpis.mangga.guests).toBe(3);
+    expect(report.kpis.byOutlet['Mangga (Day)'].sales).toBeCloseTo(113);
+    expect(report.kpis.byOutlet['Mangga (Day)'].transactions).toBe(1);
+    expect(report.kpis.byOutlet['Mangga (Day)'].guests).toBe(3);
 
-    expect(report.kpis.indigo.sales).toBeCloseTo(92);
-    expect(report.kpis.indigo.transactions).toBe(1);
-    expect(report.kpis.indigo.guests).toBe(2);
+    expect(report.kpis.byOutlet['Indigo Bar'].sales).toBeCloseTo(92);
+    expect(report.kpis.byOutlet['Indigo Bar'].transactions).toBe(1);
+    expect(report.kpis.byOutlet['Indigo Bar'].guests).toBe(2);
 
     expect(report.kpis.total.transactions).toBe(2);
     expect(report.kpis.total.guests).toBe(5);
     expect(report.topFood[0].product).toBe('Nyonya Laksa');
     expect(report.topBeverage[0].product).toBe('Flat White');
-    expect(report.salesByHour[12].manggaSales).toBeCloseTo(113);
-    expect(report.salesByHour[21].indigoSales).toBeCloseTo(92);
+    expect(report.salesByHour[12].outletSales['Mangga (Day)']).toBeCloseTo(113);
+    expect(report.salesByHour[21].outletSales['Indigo Bar']).toBeCloseTo(92);
   });
 });
 
@@ -188,5 +191,80 @@ describe('aggregator date & item search + trend', () => {
     ]);
     expect(trend.hourly[10].qty).toBe(2);
     expect(trend.hourly[14].qty).toBe(1);
+  });
+});
+
+describe('separate outlet entities', () => {
+  const rules = createDefaultMappingRules();
+
+  it.each([
+    ['Gift Shop', 'Gift Shop'],
+    ['Blue Mansion Gift Shop', 'Gift Shop'],
+    ['Indigo at the Blue Mansion (Lunch)', 'Indigo (Lunch)'],
+    ['Indigo at The Blue Mansion (Dinner)', 'Indigo (Dinner)'],
+    ['TCM', 'TCM'],
+    ['QING', 'QING'],
+    ['Qing Restaurant', 'QING'],
+    ['Mangga (Day)', 'Mangga (Day)'],
+    ['Mangga (Dinner)', 'Mangga (Dinner)'],
+    ['The Bar', 'Indigo Bar'],
+    ['Indigo Bar', 'Indigo Bar'],
+    ['Indigo at the Blue Mansion', 'Unassigned'],
+    ['Something Else', 'Unassigned'],
+  ])('maps POS config "%s" to %s', (config, expected) => {
+    expect(inferOutletFromConfig(config, rules)).toBe(expected);
+  });
+
+  it('honours exact user config overrides', () => {
+    const custom = {
+      ...createDefaultMappingRules(),
+      configOutlet: { 'indigo at the blue mansion': 'Indigo (Dinner)' as const },
+    };
+    expect(inferOutletFromConfig('Indigo at the Blue Mansion', custom)).toBe('Indigo (Dinner)');
+  });
+
+  it('keeps sales, transactions and guests separate for every outlet', () => {
+    const configs = [
+      'Gift Shop',
+      'Indigo at the Blue Mansion (Lunch)',
+      'Indigo at the Blue Mansion (Dinner)',
+      'TCM',
+      'QING',
+    ];
+    const rows = configs.map((config, i) => ({
+      'Order Ref': `POS/${100 + i}`,
+      'Order Date': `2024-06-14 ${String(10 + i).padStart(2, '0')}:00:00`,
+      'Session / Point of Sale': config,
+      Guests: i + 1,
+      'Lines / Product': `Item ${i}`,
+      'Lines / Product / POS Product Category': 'Misc',
+      'Lines / Quantity': 1,
+      'Lines / Subtotal': (i + 1) * 100,
+    }));
+
+    const dataset = normalizeRows(rows, 'outlets.xlsx', rules);
+    const report = aggregateDataset(dataset, DEFAULT_FILTERS);
+
+    expect(report.outletBreakdown.map((r) => r.outlet)).toEqual([
+      'Indigo (Lunch)',
+      'Indigo (Dinner)',
+      'Gift Shop',
+      'TCM',
+      'QING',
+    ]);
+    expect(report.kpis.byOutlet['Gift Shop'].sales).toBe(100);
+    expect(report.kpis.byOutlet['Indigo (Lunch)'].sales).toBe(200);
+    expect(report.kpis.byOutlet['Indigo (Dinner)'].sales).toBe(300);
+    expect(report.kpis.byOutlet['TCM'].sales).toBe(400);
+    expect(report.kpis.byOutlet['QING'].guests).toBe(5);
+    expect(report.kpis.byOutlet['Indigo Bar'].sales).toBe(0);
+    expect(report.unassignedItemsCount).toBe(0);
+    expect(report.kpis.total.sales).toBe(1500);
+
+    const tcmOnly = aggregateDataset(dataset, { ...DEFAULT_FILTERS, outletFilter: 'TCM' });
+    expect(tcmOnly.kpis.total.sales).toBe(400);
+    expect(tcmOnly.kpis.total.transactions).toBe(1);
+    // Breakdown ignores the outlet filter so all outlets stay comparable
+    expect(tcmOnly.outletBreakdown).toHaveLength(5);
   });
 });

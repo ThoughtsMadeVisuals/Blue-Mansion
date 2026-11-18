@@ -10,7 +10,8 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import type { FilterState, OutletFilter } from '../types/pos';
+import type { FilterState, Outlet, OutletFilter } from '../types/pos';
+import { OUTLET_INFO } from '../utils/defaultMappings';
 
 interface FilterBarProps {
   filters: FilterState;
@@ -20,17 +21,11 @@ interface FilterBarProps {
   allProducts: string[];
   allCategories: string[];
   unassignedCount: number;
+  outletsInData: Outlet[];
   onOpenMapping: () => void;
   onClearData: () => void;
 }
 
-const OUTLET_OPTIONS: { value: OutletFilter; label: string }[] = [
-  { value: 'Mangga', label: 'Mangga' },
-  { value: 'Mangga (Day)', label: 'Mangga (Day)' },
-  { value: 'Mangga (Dinner)', label: 'Mangga (Dinner)' },
-  { value: 'Indigo Bar', label: 'Indigo Bar' },
-  { value: 'compare', label: 'All Outlets' },
-];
 
 export const FilterBar: React.FC<FilterBarProps> = ({
   filters,
@@ -40,10 +35,21 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   allProducts,
   allCategories,
   unassignedCount,
+  outletsInData,
   onOpenMapping,
   onClearData,
 }) => {
   const [dateMode, setDateMode] = useState<'range' | 'single'>('range');
+
+  const outletOptions: { value: OutletFilter; label: string; title: string; color?: string }[] = [
+    { value: 'compare', label: 'All Outlets', title: 'All outlets, each shown separately' },
+    ...outletsInData.map((o) => ({
+      value: o as OutletFilter,
+      label: o,
+      title: OUTLET_INFO[o].name,
+      color: OUTLET_INFO[o].color,
+    })),
+  ];
 
   useEffect(() => {
     if (filters.dateFrom && filters.dateFrom === filters.dateTo) {
@@ -92,19 +98,28 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Outlet Switcher */}
         <div className="flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1">
-          {OUTLET_OPTIONS.map((opt) => {
+          {outletOptions.map((opt) => {
             const active = filters.outletFilter === opt.value;
             return (
               <button
                 key={opt.value}
                 type="button"
+                title={opt.title}
+                aria-pressed={active}
                 onClick={() => onChange({ ...filters, outletFilter: opt.value })}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
                   active
                     ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
+                {opt.color && (
+                  <span
+                    aria-hidden="true"
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: opt.color }}
+                  />
+                )}
                 {opt.label}
               </button>
             );

@@ -7,7 +7,9 @@ import {
   FileSpreadsheet,
   AlertCircle,
 } from 'lucide-react';
-import type { ParsedDataset, UploadedFileSummary } from '../types/pos';
+import type { Outlet, ParsedDataset, UploadedFileSummary } from '../types/pos';
+import { OUTLETS } from '../types/pos';
+import { OUTLET_INFO } from '../utils/defaultMappings';
 import { formatInt } from '../utils/formatters';
 
 interface FileStatusPanelProps {
@@ -25,7 +27,7 @@ function deriveSummaries(dataset: ParsedDataset): UploadedFileSummary[] {
       .filter((d): d is string => Boolean(d))
       .sort();
     const outlets = Array.from(
-      new Set(fileLines.map((l) => (l.subOutlet !== 'Unknown' ? l.subOutlet : l.outlet)))
+      new Set<string>(fileLines.map((l) => l.outlet))
     ).filter((o) => o !== 'Unassigned');
 
     return {
@@ -44,33 +46,21 @@ export const FileStatusPanel: React.FC<FileStatusPanelProps> = ({ dataset }) => 
   const [expanded, setExpanded] = useState(false);
   const summaries = deriveSummaries(dataset);
 
-  const hasManggaDay = dataset.lines.some((l) => l.subOutlet === 'Mangga (Day)');
-  const hasManggaDinner = dataset.lines.some((l) => l.subOutlet === 'Mangga (Dinner)');
-  const hasManggaGeneric =
-    !hasManggaDay && !hasManggaDinner && dataset.lines.some((l) => l.outlet === 'Mangga');
-  const hasIndigoBar = dataset.lines.some(
-    (l) => l.subOutlet === 'The Bar' || l.outlet === 'Indigo Bar'
-  );
+  const outletCounts = new Map<Outlet, number>();
+  for (const l of dataset.lines) {
+    outletCounts.set(l.outlet, (outletCounts.get(l.outlet) ?? 0) + 1);
+  }
 
-  const establishmentChecklist = [
-    {
-      label: 'Mangga (Day)',
-      done: hasManggaDay || hasManggaGeneric,
-      count: dataset.lines.filter((l) => l.subOutlet === 'Mangga (Day)').length,
-    },
-    {
-      label: 'Mangga (Dinner)',
-      done: hasManggaDinner || hasManggaGeneric,
-      count: dataset.lines.filter((l) => l.subOutlet === 'Mangga (Dinner)').length,
-    },
-    {
-      label: 'Indigo Bar (The Bar)',
-      done: hasIndigoBar,
-      count: dataset.lines.filter(
-        (l) => l.subOutlet === 'The Bar' || l.outlet === 'Indigo Bar'
-      ).length,
-    },
-  ];
+  // Every entity is listed separately; the generic "Mangga" and "Unassigned"
+  // buckets only appear when lines actually landed in them.
+  const establishmentChecklist = OUTLETS.filter(
+    (o) => (o !== 'Mangga' && o !== 'Unassigned') || (outletCounts.get(o) ?? 0) > 0
+  ).map((o) => ({
+    label: OUTLET_INFO[o].name,
+    done: (outletCounts.get(o) ?? 0) > 0 && o !== 'Unassigned',
+    warn: o === 'Unassigned' || o === 'Mangga',
+    count: outletCounts.get(o) ?? 0,
+  }));
 
   const criteriaChecklist = [
     { label: 'Items & Categories', done: dataset.lines.length > 0 },
@@ -192,10 +182,8 @@ export const FileStatusPanel: React.FC<FileStatusPanelProps> = ({ dataset }) => 
                     {item.label}
                   </span>
                   <span className="text-[11px] font-medium">
-                    {item.done
-                      ? item.count > 0
-                        ? `${formatInt(item.count)} lines`
-                        : 'Added'
+                    {item.count > 0
+                      ? `${formatInt(item.count)} lines${item.warn ? ' · check Mapping Rules' : ''}`
                       : 'Not added yet'}
                   </span>
                 </div>

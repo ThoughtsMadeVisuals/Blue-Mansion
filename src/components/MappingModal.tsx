@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
 import { X, RotateCcw } from 'lucide-react';
 import type { FoodBevType, MappingRules, Outlet } from '../types/pos';
-import { createDefaultMappingRules, inferFoodBev } from '../utils/defaultMappings';
+import {
+  ASSIGNABLE_OUTLETS,
+  OUTLET_INFO,
+  createDefaultMappingRules,
+  inferFoodBev,
+  matchOutletName,
+} from '../utils/defaultMappings';
+import { formatInt } from '../utils/formatters';
 
 interface MappingModalProps {
   isOpen: boolean;
   onClose: () => void;
   categories: string[];
+  configNames: { name: string; outlet: Outlet; lines: number }[];
   rules: MappingRules;
   onSave: (next: MappingRules) => void;
 }
@@ -15,6 +23,7 @@ export const MappingModal: React.FC<MappingModalProps> = ({
   isOpen,
   onClose,
   categories,
+  configNames,
   rules,
   onSave,
 }) => {
@@ -30,11 +39,29 @@ export const MappingModal: React.FC<MappingModalProps> = ({
   };
 
   const setCatOutlet = (cat: string, val: Outlet) => {
-    setDraft((prev) => ({
-      ...prev,
-      categoryOutlet: { ...prev.categoryOutlet, [cat]: val },
-    }));
+    setDraft((prev) => {
+      const next = { ...prev.categoryOutlet };
+      if (val === 'Unassigned') delete next[cat];
+      else next[cat] = val;
+      return { ...prev, categoryOutlet: next };
+    });
   };
+
+  const setConfigOutlet = (configName: string, val: Outlet | '') => {
+    const key = configName.trim().toLowerCase();
+    setDraft((prev) => {
+      const next = { ...prev.configOutlet };
+      if (val === '') delete next[key];
+      else next[key] = val;
+      return { ...prev, configOutlet: next };
+    });
+  };
+
+  const outletOptions = ASSIGNABLE_OUTLETS.map((o) => (
+    <option key={o} value={o}>
+      {OUTLET_INFO[o].name}
+    </option>
+  ));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
@@ -45,7 +72,7 @@ export const MappingModal: React.FC<MappingModalProps> = ({
               Category &amp; Outlet Mapping Rules
             </h3>
             <p className="text-xs text-slate-500">
-              Customize Food vs. Beverage classification and default Outlet overrides (for PDF summaries or unmapped rows).
+              Match each Odoo Point of Sale to its outlet, and customise Food vs. Beverage classification.
             </p>
           </div>
           <button
@@ -57,7 +84,59 @@ export const MappingModal: React.FC<MappingModalProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 space-y-6 overflow-y-auto p-5">
+          {configNames.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                POS Outlets found in your export
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                Each Odoo Point of Sale is matched to its own outlet. Change any that are wrong.
+              </p>
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left">
+                    <th className="px-3 py-2 font-semibold text-slate-700">Odoo Point of Sale</th>
+                    <th className="px-3 py-2 text-right font-semibold text-slate-700">Lines</th>
+                    <th className="px-3 py-2 font-semibold text-slate-700">Report as outlet</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {configNames.map((c) => {
+                    const key = c.name.trim().toLowerCase();
+                    const override = draft.configOutlet[key];
+                    const auto = matchOutletName(c.name);
+                    return (
+                      <tr key={c.name}>
+                        <td className="px-3 py-2 font-medium text-slate-800">{c.name}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-600">
+                          {formatInt(c.lines)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <select
+                            aria-label={`Outlet for ${c.name}`}
+                            value={override ?? ''}
+                            onChange={(e) => setConfigOutlet(c.name, e.target.value as Outlet | '')}
+                            className={`rounded-lg border px-2 py-1 text-xs ${
+                              !override && auto === 'Unassigned'
+                                ? 'border-amber-300 bg-amber-50'
+                                : 'border-slate-200'
+                            }`}
+                          >
+                            <option value="">
+                              Auto: {auto === 'Unassigned' ? 'not recognised' : OUTLET_INFO[auto].name}
+                            </option>
+                            {outletOptions}
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {categories.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-500">
               Load a file first to configure category mappings.
@@ -100,8 +179,7 @@ export const MappingModal: React.FC<MappingModalProps> = ({
                           className="rounded-lg border border-slate-200 px-2 py-1 text-xs"
                         >
                           <option value="Unassigned">Auto / Unassigned</option>
-                          <option value="Mangga">Mangga</option>
-                          <option value="Indigo Bar">Indigo Bar</option>
+                          {outletOptions}
                         </select>
                       </td>
                     </tr>

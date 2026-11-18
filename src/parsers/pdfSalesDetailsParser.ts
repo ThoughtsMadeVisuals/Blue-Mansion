@@ -119,7 +119,6 @@ export function parseSalesDetailsTextLines(
           dateKey: null,
           hour: null,
           rawConfig: 'PDF Summary',
-          subOutlet: 'Unknown',
           outlet,
           guests: null,
           product,

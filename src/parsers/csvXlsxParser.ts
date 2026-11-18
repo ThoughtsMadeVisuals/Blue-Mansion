@@ -5,7 +5,6 @@ import {
   inferFoodBev,
   inferOutletFromConfig,
   inferOutletFromHeuristics,
-  inferSubOutlet,
 } from '../utils/defaultMappings';
 
 type RawRow = Record<string, unknown>;
@@ -334,7 +333,6 @@ export function normalizeRows(
     if (product.toLowerCase() === 'total' || rawOrderRef.toLowerCase() === 'total') return;
 
     const effectiveConfig = rawConfig || lastConfig;
-    const subOutlet = inferSubOutlet(effectiveConfig);
     let outlet = inferOutletFromConfig(effectiveConfig, rules);
     if (outlet === 'Unassigned') {
       outlet = inferOutletFromHeuristics(category, product, rules);
@@ -359,7 +357,6 @@ export function normalizeRows(
       dateKey: effectiveDate?.dateKey ?? null,
       hour: effectiveDate?.hour ?? null,
       rawConfig: effectiveConfig,
-      subOutlet,
       outlet,
       guests,
       product: product || 'Order Total',
@@ -378,7 +375,7 @@ export function normalizeRows(
     .filter((d): d is string => Boolean(d))
     .sort();
   const outlets = Array.from(
-    new Set(lines.map((l) => (l.subOutlet !== 'Unknown' ? l.subOutlet : l.outlet)))
+    new Set<string>(lines.map((l) => l.outlet))
   ).filter((o) => o !== 'Unassigned');
 
   return {

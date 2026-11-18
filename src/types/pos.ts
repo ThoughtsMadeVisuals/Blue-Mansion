@@ -1,10 +1,26 @@
-export type Outlet = 'Mangga' | 'Indigo Bar' | 'Unassigned';
+/**
+ * Every POS entity is reported separately — sales are never merged across
+ * outlets. 'Mangga' is only used when a Mangga line cannot be identified as
+ * Day or Dinner (e.g. PDF summaries); 'Unassigned' is anything unrecognised.
+ */
+export const OUTLETS = [
+  'Mangga (Day)',
+  'Mangga (Dinner)',
+  'Mangga',
+  'Indigo Bar',
+  'Indigo (Lunch)',
+  'Indigo (Dinner)',
+  'Gift Shop',
+  'TCM',
+  'QING',
+  'Unassigned',
+] as const;
 
-export type SubOutlet = 'Mangga (Day)' | 'Mangga (Dinner)' | 'The Bar' | 'Unknown';
+export type Outlet = (typeof OUTLETS)[number];
 
 export type FoodBevType = 'Food' | 'Beverage' | 'Other';
 
-export type OutletFilter = 'compare' | 'Mangga' | 'Indigo Bar' | 'Mangga (Day)' | 'Mangga (Dinner)';
+export type OutletFilter = 'compare' | Outlet;
 
 export interface PosOrderLine {
   id: string;
@@ -13,7 +29,6 @@ export interface PosOrderLine {
   dateKey: string | null; // YYYY-MM-DD
   hour: number | null; // 0-23
   rawConfig: string;
-  subOutlet: SubOutlet;
   outlet: Outlet;
   guests: number | null;
   product: string;
