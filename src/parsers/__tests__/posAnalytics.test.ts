@@ -280,4 +280,45 @@ describe('separate outlet entities', () => {
     expect(cleaned.lines).toHaveLength(1);
     expect(cleaned.lines[0].outlet).toBe('Mangga (Day)');
   });
+
+  it('counts orders that share an Order Ref (e.g. "/") separately and skips cancelled orders', () => {
+    const header = (ref: string, receipt: string, date: string, status: string, guests: number) => ({
+      'Order Ref': ref,
+      Date: date,
+      'Point of Sale': 'Mangga (Day)',
+      'Receipt Number': receipt,
+      Status: status,
+      Guests: guests,
+    });
+    const rows = [
+      { ...header('/', '261-1-0001', '2026-03-01 09:00:00', 'Posted', 2), 'Order Lines/Product': 'Laksa', 'Order Lines/Quantity': 1, 'Order Lines/Tax Excl.': 30 },
+      { 'Order Lines/Product': 'Kopi', 'Order Lines/Quantity': 2, 'Order Lines/Tax Excl.': 10 },
+      { ...header('/', '261-1-0002', '2026-03-01 09:05:00', 'Posted', 3), 'Order Lines/Product': 'Laksa', 'Order Lines/Quantity': 1, 'Order Lines/Tax Excl.': 30 },
+      { ...header('/', '261-1-0003', '2026-03-01 09:10:00', 'Cancelled', 4), 'Order Lines/Product': 'Laksa', 'Order Lines/Quantity': 5, 'Order Lines/Tax Excl.': 150 },
+      { 'Order Lines/Product': 'Kopi', 'Order Lines/Quantity': 1, 'Order Lines/Tax Excl.': 5 },
+      { ...header('POS/9', '261-1-0004', '2026-03-01 09:20:00', 'Paid', 1), 'Order Lines/Product': 'Kopi', 'Order Lines/Quantity': 1, 'Order Lines/Tax Excl.': 5 },
+    ];
+    const dataset = normalizeRows(rows, 'refs.csv', rules);
+    const report = aggregateDataset(dataset, DEFAULT_FILTERS);
+    expect(report.kpis.total.sales).toBe(75);
+    expect(report.kpis.total.transactions).toBe(3);
+    expect(report.kpis.total.guests).toBe(6);
+    expect(dataset.warnings.join(' ')).toContain('Skipped 1 cancelled/draft order');
+  });
+
+  it('keeps flat exports (order columns repeated on every line) as one order', () => {
+    const line = (product: string, amount: number) => ({
+      'Order Ref': 'POS/1',
+      'Order Date': '2024-06-14 12:00:00',
+      'Session / Point of Sale': 'Mangga (Day)',
+      Guests: 2,
+      'Lines / Product': product,
+      'Lines / Quantity': 1,
+      'Lines / Subtotal': amount,
+    });
+    const dataset = normalizeRows([line('Laksa', 30), line('Kopi', 8)], 'flat.csv', rules);
+    const report = aggregateDataset(dataset, DEFAULT_FILTERS);
+    expect(report.kpis.total.transactions).toBe(1);
+    expect(report.kpis.total.guests).toBe(2);
+  });
 });

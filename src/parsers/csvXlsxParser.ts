@@ -13,6 +13,8 @@ type RawRow = Record<string, unknown>;
 
 interface ColumnMap {
   orderRef?: string;
+  receipt?: string;
+  status?: string;
   orderDate?: string;
   config?: string;
   guests?: string;
@@ -49,6 +51,17 @@ function findColumn(headers: string[], candidates: string[]): string | undefined
   return undefined;
 }
 
+function findExactColumn(headers: string[], candidates: string[]): string | undefined {
+  for (const cand of candidates) {
+    const found = headers.find((h) => normalizeHeader(h) === cand);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** Odoo order states that are not real sales. */
+const VOID_STATUSES = new Set(['cancelled', 'canceled', 'cancel', 'draft', 'new']);
+
 function detectColumns(headers: string[]): ColumnMap {
   return {
     orderRef: findColumn(headers, [
@@ -59,6 +72,8 @@ function detectColumns(headers: string[]): ColumnMap {
       'order',
       'name',
     ]),
+    receipt: findExactColumn(headers, ['receipt number', 'pos reference', 'receipt ref']),
+    status: findExactColumn(headers, ['status', 'order status', 'state']),
     orderDate: findColumn(headers, [
       'order date',
       'date order',
@@ -282,6 +297,16 @@ export function normalizeRows(
     );
   }
 
+  // Odoo's "Order Ref" is not unique (many orders export as "/" or reuse a
+  // running number), so each order is identified by its header row: a new
+  // order starts whenever the ref/receipt/date combination changes.
+  if (cols.receipt === cols.orderRef) cols.receipt = undefined;
+  let orderSeq = 0;
+  let lastIdentity = '';
+  let lastStatus = '';
+  const voidOrders = new Set<string>();
+  let voidSales = 0;
+
   const lines: PosOrderLine[] = [];
   let lastOrderRef = '';
   let lastParsedDate: { iso: string; dateKey: string; hour: number | null } | null = null;
@@ -298,14 +323,22 @@ export function normalizeRows(
 
   rows.forEach((row, idx) => {
     const rawOrderRef = cols.orderRef ? String(row[cols.orderRef] ?? '').trim() : '';
+    const rawReceipt = cols.receipt ? String(row[cols.receipt] ?? '').trim() : '';
+    const rawStatus = cols.status ? String(row[cols.status] ?? '').trim() : '';
     const rawDateVal = cols.orderDate ? row[cols.orderDate] : undefined;
     const rawConfig = cols.config ? String(row[cols.config] ?? '').trim() : '';
     const rawGuestsVal = cols.guests ? row[cols.guests] : undefined;
     const rawPayment = cols.paymentMethod ? String(row[cols.paymentMethod] ?? '').trim() : '';
 
     // When a new parent order header appears, update carry-forward state
-    if (rawOrderRef) {
-      lastOrderRef = rawOrderRef;
+    if (rawOrderRef || rawReceipt) {
+      const identity = `${rawOrderRef}|${rawReceipt}|${String(rawDateVal ?? '')}`;
+      if (identity !== lastIdentity) {
+        orderSeq += 1;
+        lastIdentity = identity;
+      }
+      lastOrderRef = `${fileName}::${rawOrderRef || rawReceipt}#${orderSeq}`;
+      lastStatus = rawStatus.toLowerCase();
       hasOrderRef = true;
       lastGuests =
         rawGuestsVal !== undefined && rawGuestsVal !== '' && rawGuestsVal !== null
@@ -345,6 +378,11 @@ export function normalizeRows(
       excludedCounts.set(outlet, (excludedCounts.get(outlet) ?? 0) + 1);
       return;
     }
+    if (lastStatus && VOID_STATUSES.has(lastStatus)) {
+      voidOrders.add(lastOrderRef);
+      voidSales += subtotal;
+      return;
+    }
 
     const effectiveDate = parsedDate ?? lastParsedDate;
     if (effectiveDate) {
@@ -380,6 +418,11 @@ export function normalizeRows(
 
   const excludedNote = describeExcluded(excludedCounts);
   if (excludedNote) warnings.push(excludedNote);
+  if (voidOrders.size > 0) {
+    warnings.push(
+      `Skipped ${voidOrders.size.toLocaleString('en-US')} cancelled/draft order${voidOrders.size === 1 ? '' : 's'} in ${fileName} (RM ${voidSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} before tax).`
+    );
+  }
 
   const dates = lines
     .map((l) => l.dateKey)
