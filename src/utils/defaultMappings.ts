@@ -34,7 +34,36 @@ export const OUTLET_INFO: Record<Outlet, OutletInfo> = {
   Unassigned: { id: 'Unassigned', name: 'Unassigned', color: '#94a3b8' },
 };
 
+/**
+ * Outlets that are recognised but left out of this report entirely. They are
+ * still matched by name so their sales are dropped, rather than falling into
+ * "Unassigned" or being mistaken for Indigo Bar.
+ */
+export const EXCLUDED_OUTLETS: ReadonlySet<Outlet> = new Set<Outlet>([
+  'Indigo (Lunch)',
+  'Indigo (Dinner)',
+  'Gift Shop',
+  'TCM',
+  'QING',
+]);
+
+export function isExcludedOutlet(outlet: Outlet): boolean {
+  return EXCLUDED_OUTLETS.has(outlet);
+}
+
+/** Outlets that appear in the report. */
+export const REPORTED_OUTLETS: Outlet[] = OUTLETS.filter((o) => !EXCLUDED_OUTLETS.has(o));
+
 export const ASSIGNABLE_OUTLETS: Outlet[] = OUTLETS.filter((o) => o !== 'Unassigned');
+
+/** Warning text listing how many lines were dropped per excluded outlet. */
+export function describeExcluded(counts: Map<Outlet, number>): string | null {
+  const parts = OUTLETS.filter((o) => (counts.get(o) ?? 0) > 0).map(
+    (o) => `${OUTLET_INFO[o].name} (${counts.get(o)!.toLocaleString('en-US')} lines)`
+  );
+  if (parts.length === 0) return null;
+  return `Not included in this report: ${parts.join(', ')}.`;
+}
 
 export function isOutlet(value: unknown): value is Outlet {
   return typeof value === 'string' && (OUTLETS as readonly string[]).includes(value);

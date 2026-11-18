@@ -34,63 +34,6 @@ export function buildSampleDataset(rules: MappingRules): ParsedDataset {
     ['Artisanal Cheese Platter', 'Sharing Platters', 65],
   ] as const;
 
-  // Other Blue Mansion outlets: [Odoo POS name, opening hours, orders/day, menu]
-  const otherOutlets: {
-    config: string;
-    hours: number[];
-    orders: number;
-    menu: readonly (readonly [string, string, number])[];
-  }[] = [
-    {
-      config: 'Indigo at the Blue Mansion (Lunch)',
-      hours: [12, 13, 14],
-      orders: 8,
-      menu: [
-        ['Nyonya Set Lunch', 'Lunch Mains', 58],
-        ['Perut Ikan', 'Lunch Mains', 42],
-        ['Iced Lemon Tea', 'Soft Drinks', 12],
-      ],
-    },
-    {
-      config: 'Indigo at the Blue Mansion (Dinner)',
-      hours: [19, 20, 21],
-      orders: 10,
-      menu: [
-        ['Indigo Tasting Menu', 'Dinner Mains', 168],
-        ['Kapitan Chicken Curry', 'Dinner Mains', 62],
-        ['House Red Wine Glass', 'House Wines', 40],
-      ],
-    },
-    {
-      config: 'Gift Shop',
-      hours: [10, 11, 15, 16],
-      orders: 6,
-      menu: [
-        ['Blue Mansion Postcard Set', 'Souvenirs', 18],
-        ['Peranakan Tile Coaster', 'Souvenirs', 35],
-        ['Nutmeg Balm', 'Souvenirs', 22],
-      ],
-    },
-    {
-      config: 'TCM',
-      hours: [10, 11, 14, 15],
-      orders: 4,
-      menu: [
-        ['Herbal Consultation', 'TCM Services', 80],
-        ['Ginseng Tea', 'Herbal Tea', 25],
-      ],
-    },
-    {
-      config: 'QING',
-      hours: [18, 19, 20],
-      orders: 7,
-      menu: [
-        ['Qing Signature Dim Sum', 'Small Plates', 32],
-        ['Chrysanthemum Tea', 'Tea', 14],
-      ],
-    },
-  ];
-
   let orderCounter = 1001;
   // Generate 14 days of realistic sample data
   for (let day = 1; day <= 14; day++) {
@@ -162,29 +105,6 @@ export function buildSampleDataset(rules: MappingRules): ParsedDataset {
           'Lines / Product / POS Product Category': foodPick[1],
           'Lines / Quantity': 1,
           'Lines / Subtotal': foodPick[2],
-        });
-      }
-    }
-  }
-
-  for (let day = 1; day <= 14; day++) {
-    const dayStr = String(day).padStart(2, '0');
-    const isWeekend = day % 7 === 6 || day % 7 === 0;
-    for (const outlet of otherOutlets) {
-      const orders = outlet.orders + (isWeekend ? 3 : 0);
-      for (let o = 0; o < orders; o++) {
-        const hour = outlet.hours[o % outlet.hours.length];
-        const pick = outlet.menu[(day + o) % outlet.menu.length];
-        const qty = 1 + (o % 2);
-        sampleRows.push({
-          'Order Ref': `POS/202406/${dayStr}/${orderCounter++}`,
-          'Order Date': `2024-06-${dayStr} ${String(hour).padStart(2, '0')}:${String((o * 11) % 60).padStart(2, '0')}:00`,
-          'Session / Point of Sale': outlet.config,
-          Guests: 1 + (o % 3),
-          'Lines / Product': pick[0],
-          'Lines / Product / POS Product Category': pick[1],
-          'Lines / Quantity': qty,
-          'Lines / Subtotal': pick[2] * qty,
         });
       }
     }

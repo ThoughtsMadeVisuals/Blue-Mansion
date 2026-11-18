@@ -8,8 +8,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import type { Outlet, ParsedDataset, UploadedFileSummary } from '../types/pos';
-import { OUTLETS } from '../types/pos';
-import { OUTLET_INFO } from '../utils/defaultMappings';
+import { OUTLET_INFO, REPORTED_OUTLETS } from '../utils/defaultMappings';
 import { formatInt } from '../utils/formatters';
 
 interface FileStatusPanelProps {
@@ -53,7 +52,7 @@ export const FileStatusPanel: React.FC<FileStatusPanelProps> = ({ dataset }) => 
 
   // Every entity is listed separately; the generic "Mangga" and "Unassigned"
   // buckets only appear when lines actually landed in them.
-  const establishmentChecklist = OUTLETS.filter(
+  const establishmentChecklist = REPORTED_OUTLETS.filter(
     (o) => (o !== 'Mangga' && o !== 'Unassigned') || (outletCounts.get(o) ?? 0) > 0
   ).map((o) => ({
     label: OUTLET_INFO[o].name,

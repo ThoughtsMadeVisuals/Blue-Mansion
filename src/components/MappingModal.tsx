@@ -4,6 +4,7 @@ import type { FoodBevType, MappingRules, Outlet } from '../types/pos';
 import {
   ASSIGNABLE_OUTLETS,
   OUTLET_INFO,
+  isExcludedOutlet,
   createDefaultMappingRules,
   inferFoodBev,
   matchOutletName,
@@ -60,6 +61,7 @@ export const MappingModal: React.FC<MappingModalProps> = ({
   const outletOptions = ASSIGNABLE_OUTLETS.map((o) => (
     <option key={o} value={o}>
       {OUTLET_INFO[o].name}
+      {isExcludedOutlet(o) ? ' — excluded from report' : ''}
     </option>
   ));
 

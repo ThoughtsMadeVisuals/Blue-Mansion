@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeRows, parseDateTime, parseNumber } from '../csvXlsxParser';
 import { parseSalesDetailsTextLines } from '../pdfSalesDetailsParser';
-import { aggregateDataset, aggregateItemTrend } from '../../utils/aggregator';
+import { aggregateDataset, aggregateItemTrend, reapplyMappings } from '../../utils/aggregator';
 import {
   createDefaultMappingRules,
   inferOutletFromConfig,
@@ -223,13 +223,15 @@ describe('separate outlet entities', () => {
     expect(inferOutletFromConfig('Indigo at the Blue Mansion', custom)).toBe('Indigo (Dinner)');
   });
 
-  it('keeps sales, transactions and guests separate for every outlet', () => {
+  it('leaves Gift Shop, Indigo Lunch/Dinner, TCM and QING out of the report', () => {
     const configs = [
+      'Mangga (Day)',
       'Gift Shop',
       'Indigo at the Blue Mansion (Lunch)',
       'Indigo at the Blue Mansion (Dinner)',
       'TCM',
       'QING',
+      'The Bar',
     ];
     const rows = configs.map((config, i) => ({
       'Order Ref': `POS/${100 + i}`,
@@ -243,28 +245,39 @@ describe('separate outlet entities', () => {
     }));
 
     const dataset = normalizeRows(rows, 'outlets.xlsx', rules);
+    expect(dataset.lines).toHaveLength(2);
+    expect(dataset.warnings.join(' ')).toContain('Not included in this report');
+
     const report = aggregateDataset(dataset, DEFAULT_FILTERS);
-
-    expect(report.outletBreakdown.map((r) => r.outlet)).toEqual([
-      'Indigo (Lunch)',
-      'Indigo (Dinner)',
-      'Gift Shop',
-      'TCM',
-      'QING',
-    ]);
-    expect(report.kpis.byOutlet['Gift Shop'].sales).toBe(100);
-    expect(report.kpis.byOutlet['Indigo (Lunch)'].sales).toBe(200);
-    expect(report.kpis.byOutlet['Indigo (Dinner)'].sales).toBe(300);
-    expect(report.kpis.byOutlet['TCM'].sales).toBe(400);
-    expect(report.kpis.byOutlet['QING'].guests).toBe(5);
-    expect(report.kpis.byOutlet['Indigo Bar'].sales).toBe(0);
+    expect(report.outletsInData).toEqual(['Mangga (Day)', 'Indigo Bar']);
+    expect(report.outletBreakdown.map((r) => r.outlet)).toEqual(['Mangga (Day)', 'Indigo Bar']);
+    expect(report.kpis.total.sales).toBe(100 + 700);
+    expect(report.kpis.total.transactions).toBe(2);
+    expect(report.kpis.total.guests).toBe(1 + 7);
     expect(report.unassignedItemsCount).toBe(0);
-    expect(report.kpis.total.sales).toBe(1500);
+  });
 
-    const tcmOnly = aggregateDataset(dataset, { ...DEFAULT_FILTERS, outletFilter: 'TCM' });
-    expect(tcmOnly.kpis.total.sales).toBe(400);
-    expect(tcmOnly.kpis.total.transactions).toBe(1);
-    // Breakdown ignores the outlet filter so all outlets stay comparable
-    expect(tcmOnly.outletBreakdown).toHaveLength(5);
+  it('drops excluded outlets from previously saved datasets on reload', () => {
+    const saved = normalizeRows(
+      [
+        {
+          'Order Ref': 'POS/1',
+          'Order Date': '2024-06-14 12:00:00',
+          'Session / Point of Sale': 'Mangga (Day)',
+          'Lines / Product': 'Laksa',
+          'Lines / Product / POS Product Category': 'Mains',
+          'Lines / Quantity': 1,
+          'Lines / Subtotal': 30,
+        },
+      ],
+      'old.xlsx',
+      rules
+    );
+    // Simulate an older saved line that belonged to TCM
+    saved.lines.push({ ...saved.lines[0], id: 'old-tcm', rawConfig: 'TCM', orderRef: 'POS/2' });
+
+    const cleaned = reapplyMappings(saved, rules);
+    expect(cleaned.lines).toHaveLength(1);
+    expect(cleaned.lines[0].outlet).toBe('Mangga (Day)');
   });
 });

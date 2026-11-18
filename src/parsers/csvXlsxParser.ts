@@ -1,10 +1,12 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-import type { MappingRules, ParsedDataset, PosOrderLine } from '../types/pos';
+import type { MappingRules, Outlet, ParsedDataset, PosOrderLine } from '../types/pos';
 import {
   inferFoodBev,
   inferOutletFromConfig,
   inferOutletFromHeuristics,
+  describeExcluded,
+  isExcludedOutlet,
 } from '../utils/defaultMappings';
 
 type RawRow = Record<string, unknown>;
@@ -287,6 +289,8 @@ export function normalizeRows(
   let lastGuests: number | null = null;
   let lastPayment = '';
 
+  const excludedCounts = new Map<Outlet, number>();
+
   let hasHourly = false;
   let hasDailyItems = false;
   let hasGuests = false;
@@ -337,6 +341,10 @@ export function normalizeRows(
     if (outlet === 'Unassigned') {
       outlet = inferOutletFromHeuristics(category, product, rules);
     }
+    if (isExcludedOutlet(outlet)) {
+      excludedCounts.set(outlet, (excludedCounts.get(outlet) ?? 0) + 1);
+      return;
+    }
 
     const effectiveDate = parsedDate ?? lastParsedDate;
     if (effectiveDate) {
@@ -369,6 +377,9 @@ export function normalizeRows(
       sourceType: 'csv_xlsx',
     });
   });
+
+  const excludedNote = describeExcluded(excludedCounts);
+  if (excludedNote) warnings.push(excludedNote);
 
   const dates = lines
     .map((l) => l.dateKey)

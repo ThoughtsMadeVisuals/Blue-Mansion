@@ -8,9 +8,11 @@ import type {
 } from '../types/pos';
 import { OUTLETS } from '../types/pos';
 import {
+  describeExcluded,
   inferFoodBev,
   inferOutletFromConfig,
   inferOutletFromHeuristics,
+  isExcludedOutlet,
 } from './defaultMappings';
 
 export interface OutletMetrics {
@@ -133,9 +135,24 @@ export function reapplyMappings(
     return { ...line, outlet, foodBev };
   });
 
+  // Drop outlets that are not part of this report (also cleans up datasets
+  // saved before they were excluded).
+  const excludedCounts = new Map<Outlet, number>();
+  const keptLines = updatedLines.filter((line) => {
+    if (!isExcludedOutlet(line.outlet)) return true;
+    excludedCounts.set(line.outlet, (excludedCounts.get(line.outlet) ?? 0) + 1);
+    return false;
+  });
+
+  const excludedNote = describeExcluded(excludedCounts);
+  const warnings = excludedNote
+    ? [...dataset.warnings, excludedNote]
+    : dataset.warnings;
+
   return {
     ...dataset,
-    lines: updatedLines,
+    lines: keptLines,
+    warnings,
   };
 }
 

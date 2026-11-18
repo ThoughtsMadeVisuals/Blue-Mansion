@@ -1,12 +1,18 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import type {
   MappingRules,
+  Outlet,
   ParsedDataset,
   PdfDailySessionRow,
   PdfPaymentSummary,
   PosOrderLine,
 } from '../types/pos';
-import { inferFoodBev, inferOutletFromHeuristics } from '../utils/defaultMappings';
+import {
+  describeExcluded,
+  inferFoodBev,
+  inferOutletFromHeuristics,
+  isExcludedOutlet,
+} from '../utils/defaultMappings';
 
 // Configure worker for browser Vite bundle
 if (typeof window !== 'undefined' && 'Worker' in window) {
@@ -31,6 +37,7 @@ export function parseSalesDetailsTextLines(
   const pdfPayments: PdfPaymentSummary[] = [];
   const pdfDailySessions: PdfDailySessionRow[] = [];
   const warnings: string[] = [];
+  const excludedCounts = new Map<Outlet, number>();
 
   let section: 'header' | 'sales' | 'taxes' | 'payments' | 'sessions' = 'header';
   let currentCategory = 'Uncategorized';
@@ -110,6 +117,10 @@ export function parseSalesDetailsTextLines(
         }
 
         const outlet = inferOutletFromHeuristics(currentCategory, product, rules);
+        if (isExcludedOutlet(outlet)) {
+          excludedCounts.set(outlet, (excludedCounts.get(outlet) ?? 0) + 1);
+          continue;
+        }
         const foodBev = inferFoodBev(currentCategory, product, rules);
 
         lines.push({
@@ -175,6 +186,9 @@ export function parseSalesDetailsTextLines(
   for (const [method, amount] of paymentTotalsMap.entries()) {
     pdfPayments.push({ method, amount });
   }
+
+  const excludedNote = describeExcluded(excludedCounts);
+  if (excludedNote) warnings.push(excludedNote);
 
   warnings.push(
     'PDF Summary Mode: Odoo "Sales Details" PDFs do not include hourly timestamps or guest counts, and combine outlets into one report. Upload an Odoo POS Orders/Order Lines CSV or Excel export for exact hourly, daily item, guest, and per-outlet data.'
