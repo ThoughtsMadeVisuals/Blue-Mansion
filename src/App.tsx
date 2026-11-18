@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, Info, RotateCcw, X, XCircle } from 'lucide-react';
-import type { FilterState, MappingRules, Outlet, ParsedDataset } from './types/pos';
+import type { FilterState, FoodBevType, MappingRules, Outlet, ParsedDataset } from './types/pos';
 import {
   OUTLET_INFO,
   clearMappingRules,
@@ -33,6 +33,7 @@ import { MappingModal } from './components/MappingModal';
 import { OutletBreakdownPanel } from './components/OutletBreakdownPanel';
 import { ReceiptsPanel } from './components/ReceiptsPanel';
 import { MethodologyPanel } from './components/MethodologyPanel';
+import { SalesByTypePanel } from './components/SalesByTypePanel';
 
 const INITIAL_FILTERS: FilterState = {
   outlets: [],
@@ -207,6 +208,13 @@ export function App() {
     if (files.length > 0) commitFiles(files.map((f) => reapplyMappings(f, nextRules)));
   };
 
+  const handleChangeItemType = (product: string, type: FoodBevType | null) => {
+    const itemFoodBev = { ...(rules.itemFoodBev ?? {}) };
+    if (type) itemFoodBev[product] = type;
+    else delete itemFoodBev[product];
+    handleSaveRules({ ...rules, itemFoodBev });
+  };
+
   const dataset = useMemo(() => combineFiles(files), [files]);
 
   // Distinct POS config/session names, with the outlet each currently maps to
@@ -362,6 +370,13 @@ export function App() {
               capabilities={dataset.capabilities}
               activeOutlets={filters.outlets}
               onChangeOutlets={(outlets) => setFilters((prev) => ({ ...prev, outlets }))}
+            />
+
+            <SalesByTypePanel
+              report={report}
+              outletLabel={outletLabel}
+              overriddenItems={rules.itemFoodBev ?? {}}
+              onChangeItemType={handleChangeItemType}
             />
 
             <MostSoldItemsPanel

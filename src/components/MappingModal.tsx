@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, RotateCcw } from 'lucide-react';
 import type { FoodBevType, MappingRules, Outlet } from '../types/pos';
+import { ITEM_TYPES } from '../types/pos';
 import {
   ASSIGNABLE_OUTLETS,
   OUTLET_INFO,
@@ -148,7 +149,7 @@ export const MappingModal: React.FC<MappingModalProps> = ({
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-left">
                   <th className="px-3 py-2 font-semibold text-slate-700">POS Category</th>
-                  <th className="px-3 py-2 font-semibold text-slate-700">Food / Beverage</th>
+                  <th className="px-3 py-2 font-semibold text-slate-700">Sales type</th>
                   <th className="px-3 py-2 font-semibold text-slate-700">
                     Outlet Fallback (if not in CSV Config)
                   </th>
@@ -169,9 +170,11 @@ export const MappingModal: React.FC<MappingModalProps> = ({
                           }
                           className="rounded-lg border border-slate-200 px-2 py-1 text-xs"
                         >
-                          <option value="Food">Food</option>
-                          <option value="Beverage">Beverage</option>
-                          <option value="Other">Other</option>
+                          {ITEM_TYPES.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
                         </select>
                       </td>
                       <td className="px-3 py-2">

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import type { ItemAggRow } from '../utils/aggregator';
 import { formatInt, formatRM, formatShortCategory } from '../utils/formatters';
+import { TYPE_BADGE } from '../utils/itemTypes';
 
 interface SalesByItemTableProps {
   items: ItemAggRow[];
@@ -154,13 +155,7 @@ export const SalesByItemTable: React.FC<SalesByItemTableProps> = ({
                     </td>
                     <td className="px-3 py-2">
                       <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          row.foodBev === 'Food'
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : row.foodBev === 'Beverage'
-                              ? 'bg-indigo-50 text-indigo-700'
-                              : 'bg-slate-100 text-slate-600'
-                        }`}
+                        className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_BADGE[row.foodBev] ?? TYPE_BADGE.Other}`}
                       >
                         {row.foodBev}
                       </span>

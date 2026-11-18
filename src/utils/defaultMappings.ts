@@ -241,20 +241,111 @@ function matchesKeyword(text: string, keyword: string): boolean {
   return new RegExp(`\\b${escaped}(?:s|es)?\\b`, 'i').test(text);
 }
 
+// ---------------------------------------------------------------------------
+// Item type rules. Checked in order; the first match wins.
+// ---------------------------------------------------------------------------
+
+/** Types the user asked to keep separate from Food and Beverage. */
+const SPECIAL_TYPE_RULES: [RegExp, FoodBevType][] = [
+  [/\bdiscount\b|\[disc/i, 'Discount'],
+  [/\bopen beverages?\b/i, 'Open Beverage'],
+  [/^open item\b/i, 'Open Item'],
+  [/refreshment package/i, 'Refreshment Package'],
+  [/afternoon tea|\btea for two\b|\btea set\b/i, 'Afternoon Tea'],
+  [/\bbuffet\b|\bcourse menu\b|\b\d[- ]course\b|\bbrunch menu\b|\bsharing menu\b|\blunch set\b|\bset (?:lunch|dinner|menu)\b|\b(?:lunch|dinner) menu\b|\bbreakfast (?:adult|child)\b|\[extrabreakfast/i, 'Set Menu'],
+  [/\btours?\b|corkage|delivery fee|\btips?\b|service charge/i, 'Other'],
+  // Confirmed as drinks although their names/codes look like desserts
+  [/lychee & earl grey|virgin colada|taromisu|cinnamon spice/i, 'Beverage'],
+];
+
+/** Words that make an item food even if it also contains a drink word
+ *  (e.g. "Coconut Pancake", "Teh Tarik Creme Brulee", "Mushroom Cappucino"). */
+const STRONG_FOOD_RE =
+  /\b(?:pancakes?|cakes?|cheesecake|shortcake|brul[eé]e|tarts?|gateaux?|toast|waffles?|mousse|mochi|tiramisu|matchamisu|scones?|croissants?|entremet|pudding|eaton mess|eton mess|muesli|porridge|sorbet|gula melaka|mushroom cappucino|drizzle|sweet and sour|rice)\b/i;
+
+/** Menu codes used in the POS item names. */
+const FOOD_CODE_RE = /^(?:\[(?:SW|SP|BP|AD?\d|ADD|PT|BIGB)[^\]]*\]|(?:A\d|F|KIDS|LLA)\s*-\s)/i;
+const BEVERAGE_CODE_RE =
+  /^(?:\((?:G|MG|MB|B|HHG|HHB|MHHG|MHHB|TBM-HH)\)|\[(?:BV|C\d|T\d|J\d|KM|KS|MMB|COM|SS|HS|MA|KFLG)[^\]]*\]|(?:W|HH|C\d?)\s*-\s)/i;
+
+const EXTRA_BEVERAGE_WORDS = [
+  // cocktails & mocktails
+  'mojito', 'negroni', 'margarita', 'martini', 'sling', 'spritz', 'sour', 'mule', 'collins',
+  'daiquiri', 'caipirinha', 'caipiroska', 'cosmopolitan', 'old fashioned', 'colada', 'russian',
+  'toddy', 'shirley temple', 'melon ball', 'kwai feh', 'pineapple express', 'punch',
+  // spirits, liqueurs, beer
+  'shot', 'bombay sapphire', 'botanist', 'tanqueray', 'macallan', 'glenfiddich', 'glenlivet',
+  'singleton', 'suntory', 'kakubin', 'jameson', 'hendrick', 'midori', 'bailey', "bailey's",
+  'kahlua', 'amaretto', 'cointreau', 'grand marnier', 'malibu', 'aperol', 'tiger',
+  'kronenbourg', '1664',
+  // wine
+  'chardonnay', 'shiraz', 'malbec', 'melbec', 'cabernet', 'carbernet', 'cab', 'merlot', 'pinot',
+  'riesling', 'sauvignon', 'moscato', 'rose', 'rosé', 'chianti', 'rioja', 'reserva', 'reserve',
+  'valdobbiadene', 'cava', 'bubbles', 'viognier', 'torrontes', 'gewurztraminer',
+  'gewurstraminner', 'carmenere', "nero d'avola", 'amarone', 'brunello', 'chablis', 'bourgogne',
+  'rhone', 'chateauneuf', 'condrieu', 'pomerol', 'emillion', 'emilion', 'montrachet', 'verdejo',
+  'marsanne', 'corvina', 'grenache', 'mataro', 'gavi', 'docg', 'doc', 'aoc', 'igp', 'bianco',
+  'rouge', 'blanc', 'noir', 'glass', 'gls', 'bottle', 'angove', 'hereford', 'changyu',
+  'chang yu', 'longyu', 'tannes', 'chalk hill', 'catena', 'alamos', 'saint clair', 'trimbach',
+  'guigal', 'donnafugata', 'faustino', 'bichot', 'miraval', 'marlborough', 'grant burge',
+  'arrogant frog', 'chateau',
+  // soft drinks, coffee & tea
+  'coke', 'sprite', 'ginger ale', 'tonic', 'limeade', 'cooler', 'sugarcane', 'lemongrass',
+  'frappe', 'milkshake', 'still', 'acqua', 'acquapura', 'coconut', 'honey lemon', 'calamansi',
+  'turmeric', 'americano', 'flat white', 'long black', 'mocha', 'cappucino', 'chamomile',
+  'peppermint', 'earl grey', 'sencha', 'hot chocolate', 'iced chocolate', 'chocolate iced',
+  'oat milk', 'soy milk', 'milk', 'extra shot', 'mix fruits', 'lime',
+];
+
+const EXTRA_FOOD_WORDS = [
+  'nasi', 'satay', 'burger', 'cheeseburger', 'fries', 'laksa', 'wing', 'spring roll', 'penne',
+  'spaghetti', 'capellini', 'conchiglie', 'carbonara', 'aglio', 'bolognese', 'pomodoro',
+  'cauliflower', 'cucur', 'fritter', 'samosa', 'pakora', 'prawn', 'drumette', 'patatas',
+  'mackerel', 'chicken', 'duck', 'beef', 'lamb', 'wagyu', 'snapper', 'halibut', 'fish', 'chip',
+  'stroganoff', 'egg', 'omelette', 'omellete', 'paratha', 'acai', 'pain au', 'twist', 'mussel',
+  'clam', 'calamari', 'albondigas', 'boquerones', 'emping', 'tomatoes', 'karaage', 'otah',
+  'gado', 'rendang', 'benedict', 'pie tee', 'ossobuco', 'meatball', 'vegetable', 'gratin',
+  'baguette', 'brookies', 'chocolate', 'yee sang', 'cheesy', 'onion', 'pistachio', 'slice',
+  'ondeh', 'onde', 'lekor', 'tempe', 'tempeh', 'ulam', 'pate', 'wrap', 'kapitan', 'mushroom',
+  'ketupat', 'salmon', 'tofu', 'millet', 'puff', 'choux', 'opera', 'decadent', 'kacang', 'ham',
+  'shortrib', 'chop', 'mosaic', 'cheek', 'pulut', 'nutella',
+];
+
+function cleanItemName(product: string): string {
+  return product.replace(/^[\s'"`]+/, '').trim();
+}
+
+function anyWord(text: string, words: readonly string[]): boolean {
+  return words.some((w) => matchesKeyword(text, w));
+}
+
 export function inferFoodBev(
   category: string,
   product: string,
   rules: MappingRules
 ): FoodBevType {
+  const name = cleanItemName(product);
+
+  const itemOverride = rules.itemFoodBev?.[product];
+  if (itemOverride) return itemOverride;
   if (rules.categoryFoodBev[category]) {
     return rules.categoryFoodBev[category];
   }
+
+  for (const [re, type] of SPECIAL_TYPE_RULES) {
+    if (re.test(name)) return type;
+  }
+
+  if (STRONG_FOOD_RE.test(name)) return 'Food';
+  if (FOOD_CODE_RE.test(name)) return 'Food';
+  if (BEVERAGE_CODE_RE.test(name)) return 'Beverage';
 
   // Check from most specific category segment (leaf) to parent segments
   const segments = category
     .split('/')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean)
+    .filter((s) => s !== 'uncategorized')
     .reverse();
 
   for (const seg of segments) {
@@ -266,12 +357,12 @@ export function inferFoodBev(
     }
   }
 
-  const prodNorm = product.toLowerCase();
-  for (const kw of FOOD_KEYWORDS) {
-    if (matchesKeyword(prodNorm, kw)) return 'Food';
+  const prodNorm = name.toLowerCase();
+  if (anyWord(prodNorm, BEVERAGE_KEYWORDS) || anyWord(prodNorm, EXTRA_BEVERAGE_WORDS)) {
+    return 'Beverage';
   }
-  for (const kw of BEVERAGE_KEYWORDS) {
-    if (matchesKeyword(prodNorm, kw)) return 'Beverage';
+  if (anyWord(prodNorm, FOOD_KEYWORDS) || anyWord(prodNorm, EXTRA_FOOD_WORDS)) {
+    return 'Food';
   }
 
   return 'Other';
@@ -280,6 +371,7 @@ export function inferFoodBev(
 export function createDefaultMappingRules(): MappingRules {
   return {
     categoryFoodBev: {},
+    itemFoodBev: {},
     categoryOutlet: {},
     itemOutlet: {},
     configOutlet: {},
@@ -302,6 +394,7 @@ export function loadMappingRules(): MappingRules {
       const parsed = JSON.parse(raw) as Partial<MappingRules>;
       return {
         categoryFoodBev: parsed.categoryFoodBev ?? {},
+        itemFoodBev: parsed.itemFoodBev ?? {},
         categoryOutlet: cleanOutletRecord(parsed.categoryOutlet),
         itemOutlet: cleanOutletRecord(parsed.itemOutlet),
         configOutlet: cleanOutletRecord(parsed.configOutlet),

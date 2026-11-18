@@ -18,7 +18,20 @@ export const OUTLETS = [
 
 export type Outlet = (typeof OUTLETS)[number];
 
-export type FoodBevType = 'Food' | 'Beverage' | 'Other';
+/** Sales types. Each item is put in exactly one. */
+export const ITEM_TYPES = [
+  'Food',
+  'Beverage',
+  'Set Menu',
+  'Afternoon Tea',
+  'Refreshment Package',
+  'Open Item',
+  'Open Beverage',
+  'Discount',
+  'Other',
+] as const;
+
+export type FoodBevType = (typeof ITEM_TYPES)[number];
 
 /** 'valid' orders count as sales; cancelled/draft are shown separately only. */
 export type OrderStatus = 'valid' | 'cancelled' | 'draft';
@@ -117,6 +130,8 @@ export interface ParsedDataset {
 
 export interface MappingRules {
   categoryFoodBev: Record<string, FoodBevType>;
+  /** Per-item type overrides, keyed by exact item name */
+  itemFoodBev?: Record<string, FoodBevType>;
   categoryOutlet: Record<string, Outlet>;
   itemOutlet: Record<string, Outlet>;
   configOutlet: Record<string, Outlet>;

@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import type { FilterState, Outlet } from '../types/pos';
+import { ITEM_TYPES } from '../types/pos';
 import { OUTLET_INFO } from '../utils/defaultMappings';
 
 interface FilterBarProps {
@@ -143,7 +144,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           })}
         </div>
 
-        {/* Food / Bev Filter */}
+        {/* Sales type filter */}
         <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
           <Filter className="ml-2 h-3.5 w-3.5 text-slate-400" />
           {(['All', 'Food', 'Beverage'] as const).map((fb) => {
@@ -152,6 +153,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               <button
                 key={fb}
                 type="button"
+                aria-pressed={active}
                 onClick={() => onChange({ ...filters, foodBevFilter: fb })}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition cursor-pointer ${
                   active
@@ -163,6 +165,25 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               </button>
             );
           })}
+          <select
+            aria-label="Sales type"
+            value={ITEM_TYPES.slice(2).includes(filters.foodBevFilter as never) ? filters.foodBevFilter : ''}
+            onChange={(e) =>
+              onChange({ ...filters, foodBevFilter: (e.target.value || 'All') as FilterState['foodBevFilter'] })
+            }
+            className={`rounded-lg border-0 py-1.5 pl-2 pr-6 text-xs font-medium cursor-pointer ${
+              ITEM_TYPES.slice(2).includes(filters.foodBevFilter as never)
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'bg-transparent text-slate-600'
+            }`}
+          >
+            <option value="">More types…</option>
+            {ITEM_TYPES.slice(2).map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Date Range or Particular Date */}

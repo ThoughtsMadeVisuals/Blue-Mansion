@@ -1,7 +1,8 @@
 import React from 'react';
 import { Store } from 'lucide-react';
 import type { OutletBreakdownRow } from '../utils/aggregator';
-import type { DatasetCapabilities, Outlet } from '../types/pos';
+import type { DatasetCapabilities, FoodBevType, Outlet } from '../types/pos';
+import { ITEM_TYPES } from '../types/pos';
 import { OUTLET_INFO } from '../utils/defaultMappings';
 import { formatInt, formatRM } from '../utils/formatters';
 
@@ -33,15 +34,20 @@ export const OutletBreakdownPanel: React.FC<OutletBreakdownPanelProps> = ({
   const total = rows.reduce(
     (acc, r) => ({
       sales: acc.sales + r.sales,
-      food: acc.food + r.foodSales,
-      bev: acc.bev + r.beverageSales,
-      other: acc.other + r.otherSales,
       qty: acc.qty + r.qty,
       tx: acc.tx + r.transactions,
       guests: acc.guests + r.guests,
     }),
-    { sales: 0, food: 0, bev: 0, other: 0, qty: 0, tx: 0, guests: 0 }
+    { sales: 0, qty: 0, tx: 0, guests: 0 }
   );
+  const typeTotals: Partial<Record<FoodBevType, number>> = {};
+  for (const r of rows) {
+    for (const [t, v] of Object.entries(r.salesByType) as [FoodBevType, number][]) {
+      typeTotals[t] = (typeTotals[t] ?? 0) + v;
+    }
+  }
+  // One column per sales type that has any sales
+  const typeColumns = ITEM_TYPES.filter((t) => Math.abs(typeTotals[t] ?? 0) > 0.005);
 
   const maxSales = Math.max(...rows.map((r) => r.sales), 0);
   const dash = <span className="text-slate-300">—</span>;
@@ -59,15 +65,17 @@ export const OutletBreakdownPanel: React.FC<OutletBreakdownPanelProps> = ({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[840px] border-collapse text-xs">
+        <table className="w-full min-w-[1100px] border-collapse text-xs">
           <thead>
             <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
               <th scope="col" className="py-2 pr-3 font-semibold">Outlet</th>
               <th scope="col" className="px-3 py-2 text-right font-semibold">Sales</th>
               <th scope="col" className="w-40 px-3 py-2 font-semibold">Share</th>
-              <th scope="col" className="px-3 py-2 text-right font-semibold">Food</th>
-              <th scope="col" className="px-3 py-2 text-right font-semibold">Beverage</th>
-              <th scope="col" className="px-3 py-2 text-right font-semibold" title="Retail, services and anything not classed as food or beverage">Other</th>
+              {typeColumns.map((t) => (
+                <th key={t} scope="col" className="px-3 py-2 text-right font-semibold">
+                  {t}
+                </th>
+              ))}
               <th scope="col" className="px-3 py-2 text-right font-semibold">Orders</th>
               <th scope="col" className="px-3 py-2 text-right font-semibold">Guests</th>
               <th scope="col" className="px-3 py-2 text-right font-semibold">Avg Ticket</th>
@@ -128,15 +136,11 @@ export const OutletBreakdownPanel: React.FC<OutletBreakdownPanelProps> = ({
                       </span>
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                    {formatRM(r.foodSales)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                    {formatRM(r.beverageSales)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-700">
-                    {formatRM(r.otherSales)}
-                  </td>
+                  {typeColumns.map((t) => (
+                    <td key={t} className="px-3 py-2 text-right tabular-nums text-slate-700">
+                      {formatRM(r.salesByType[t] ?? 0)}
+                    </td>
+                  ))}
                   <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                     {hasTx ? formatInt(r.transactions) : dash}
                   </td>
@@ -158,9 +162,11 @@ export const OutletBreakdownPanel: React.FC<OutletBreakdownPanelProps> = ({
               <td className="py-2 pr-3">All outlets</td>
               <td className="px-3 py-2 text-right tabular-nums">{formatRM(total.sales)}</td>
               <td className="px-3 py-2 text-slate-500">100%</td>
-              <td className="px-3 py-2 text-right tabular-nums">{formatRM(total.food)}</td>
-              <td className="px-3 py-2 text-right tabular-nums">{formatRM(total.bev)}</td>
-              <td className="px-3 py-2 text-right tabular-nums">{formatRM(total.other)}</td>
+              {typeColumns.map((t) => (
+                <td key={t} className="px-3 py-2 text-right tabular-nums">
+                  {formatRM(typeTotals[t] ?? 0)}
+                </td>
+              ))}
               <td className="px-3 py-2 text-right tabular-nums">
                 {hasTx ? formatInt(total.tx) : dash}
               </td>

@@ -3,6 +3,7 @@ import { BookOpenCheck } from 'lucide-react';
 import type { FilterState, Outlet, ParsedDataset } from '../types/pos';
 import type { AggregatedReport } from '../utils/aggregator';
 import { EXCLUDED_OUTLETS, OUTLET_INFO } from '../utils/defaultMappings';
+import { ITEM_TYPES } from '../types/pos';
 import { formatInt, formatRM } from '../utils/formatters';
 
 interface MethodologyPanelProps {
@@ -275,13 +276,14 @@ export const MethodologyPanel: React.FC<MethodologyPanelProps> = ({ dataset, rep
               <dd>From the order date and time, exactly as exported from Odoo.</dd>
             </div>
             <div>
-              <dt className="font-semibold text-slate-900">Food / Beverage / Other</dt>
+              <dt className="font-semibold text-slate-900">Sales types</dt>
               <dd>
+                Every item is put in one type: {ITEM_TYPES.join(', ')}.{' '}
                 {hasCategory
-                  ? 'Guessed from each item’s category, then its name.'
-                  : 'Guessed from item names only, because the export has no category column.'}{' '}
-                Anything not recognised is “Other” (currently {(otherShare * 100).toFixed(0)}% of
-                sales). Change it per category in Mapping Rules.
+                  ? 'The type comes from the item’s category, then its name.'
+                  : 'The export has no category column, so the type comes from the item name and its menu code (for example [BV] drinks, [SW] sweets, (MG) wine by the glass).'}{' '}
+                Anything not recognised is “Other” (currently {(otherShare * 100).toFixed(1)}% of
+                sales). You can change any item’s type under Sales by Type; your choices are saved.
               </dd>
             </div>
           </dl>

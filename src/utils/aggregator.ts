@@ -6,7 +6,7 @@ import type {
   ParsedDataset,
   PosOrderLine,
 } from '../types/pos';
-import { OUTLETS } from '../types/pos';
+import { ITEM_TYPES, OUTLETS } from '../types/pos';
 import {
   describeExcluded,
   inferFoodBev,
@@ -26,9 +26,8 @@ export interface OutletMetrics {
 
 export interface OutletBreakdownRow extends OutletMetrics {
   outlet: Outlet;
-  foodSales: number;
-  beverageSales: number;
-  otherSales: number;
+  /** Sales per item type (Food, Beverage, Set Menu, ...) */
+  salesByType: Partial<Record<FoodBevType, number>>;
   share: number; // 0-1 of grand total sales
 }
 
@@ -283,12 +282,12 @@ function collectOrders(lines: PosOrderLine[]): Map<string, OrderInfo> {
 function buildOutletBreakdown(lines: PosOrderLine[]): OutletBreakdownRow[] {
   const acc = new Map<
     Outlet,
-    { sales: number; qty: number; tx: number; guests: number; food: number; bev: number; other: number }
+    { sales: number; qty: number; tx: number; guests: number; byType: Partial<Record<FoodBevType, number>> }
   >();
   const get = (o: Outlet) => {
     let row = acc.get(o);
     if (!row) {
-      row = { sales: 0, qty: 0, tx: 0, guests: 0, food: 0, bev: 0, other: 0 };
+      row = { sales: 0, qty: 0, tx: 0, guests: 0, byType: {} };
       acc.set(o, row);
     }
     return row;
@@ -299,9 +298,7 @@ function buildOutletBreakdown(lines: PosOrderLine[]): OutletBreakdownRow[] {
     const row = get(line.outlet);
     row.sales += line.subtotal;
     row.qty += line.qty;
-    if (line.foodBev === 'Food') row.food += line.subtotal;
-    else if (line.foodBev === 'Beverage') row.bev += line.subtotal;
-    else row.other += line.subtotal;
+    row.byType[line.foodBev] = (row.byType[line.foodBev] ?? 0) + line.subtotal;
     grand += line.subtotal;
   }
   for (const ord of collectOrders(lines).values()) {
@@ -315,9 +312,7 @@ function buildOutletBreakdown(lines: PosOrderLine[]): OutletBreakdownRow[] {
     return {
       outlet: o,
       ...makeMetrics(r.sales, r.qty, r.tx, r.guests),
-      foodSales: r.food,
-      beverageSales: r.bev,
-      otherSales: r.other,
+      salesByType: r.byType,
       share: grand !== 0 ? r.sales / grand : 0,
     };
   });
@@ -385,11 +380,9 @@ export function aggregateDataset(
 
   const itemMap = new Map<string, ItemAggRow>();
   const catMap = new Map<string, CategoryAggRow>();
-  const fbMap = new Map<FoodBevType, { totalSales: number; totalQty: number }>([
-    ['Food', { totalSales: 0, totalQty: 0 }],
-    ['Beverage', { totalSales: 0, totalQty: 0 }],
-    ['Other', { totalSales: 0, totalQty: 0 }],
-  ]);
+  const fbMap = new Map<FoodBevType, { totalSales: number; totalQty: number }>(
+    ITEM_TYPES.map((t) => [t, { totalSales: 0, totalQty: 0 }])
+  );
 
   const hourBuckets: HourAggRow[] = Array.from({ length: 24 }, (_, hour) => ({
     hour,
@@ -453,7 +446,7 @@ export function aggregateDataset(
     addTo(catRow.outletSales, line.outlet, line.subtotal);
 
     // Food vs Beverage
-    const fb = fbMap.get(line.foodBev)!;
+    const fb = fbMap.get(line.foodBev) ?? fbMap.get('Other')!;
     fb.totalSales += line.subtotal;
     fb.totalQty += line.qty;
 
